@@ -151,6 +151,34 @@ export function SettingsView() {
         </div>
 
         <div className="glass">
+  <h2 className="card-title">⚡ Groq API key</h2>
+
+  <div className="field" style={{ marginBottom: 0 }}>
+    <label htmlFor="groq-key">Groq API Key</label>
+
+    <input
+      id="groq-key"
+      className="input"
+      type="password"
+      placeholder="gsk_..."
+      value={settings.groqApiKey || ""}
+      onChange={(e) =>
+        dispatch({
+          type: "UPDATE_SETTINGS",
+          settings: { groqApiKey: e.target.value },
+        })
+      }
+      autoComplete="off"
+      spellCheck={false}
+    />
+
+    <span className="hint">
+      Your Groq key powers the lightning-fast Llama models.
+    </span>
+  </div>
+</div>
+
+        <div className="glass">
           <h2 className="card-title">🖥️ Local Ollama tunnel</h2>
           <div className="field">
             <label htmlFor="ollama-url">ngrok tunnel URL</label>
