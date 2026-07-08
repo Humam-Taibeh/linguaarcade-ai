@@ -45,7 +45,7 @@ const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models
 /** Only the last N turns are sent — enough context, minimal latency. */
 const HISTORY_WINDOW = 20;
 const TEMPERATURE = 0.7;
-const MAX_OUTPUT_TOKENS = 1024;
+const MAX_OUTPUT_TOKENS = 512;
 
 export const TUTOR_SYSTEM_PROMPT = `You are "Lingua", a warm but rigorous English conversation tutor inside the LinguaArcade AI app. The learner practices spoken and written English with you.
 
