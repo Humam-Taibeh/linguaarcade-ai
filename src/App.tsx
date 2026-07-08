@@ -3,7 +3,7 @@
  * sentence" hand-off (My Sentences → Shadowing Studio).
  *
  * Navigation is plain component state rather than a router: the app is a
- * single-screen tool with five panels and no need for deep links, so a router
+ * single-screen tool with six panels and no need for deep links, so a router
  * dependency would be pure overhead.
  */
 import { useCallback, useState } from "react";
@@ -11,6 +11,7 @@ import { AppStateProvider } from "./state/AppStateContext";
 import { Sidebar } from "./components/Sidebar";
 import { Dashboard } from "./views/Dashboard";
 import { ShadowingStudio } from "./views/ShadowingStudio";
+import { ReviewStudio } from "./views/ReviewStudio";
 import { Conversation } from "./views/Conversation";
 import { MySentences } from "./views/MySentences";
 import { SettingsView } from "./views/Settings";
@@ -39,6 +40,7 @@ export default function App() {
         <main className="main-content">
           {view === "dashboard" && <Dashboard onNavigate={setView} />}
           {view === "shadowing" && <ShadowingStudio practiceRequest={practiceRequest} />}
+          {view === "review" && <ReviewStudio />}
           {view === "conversation" && <Conversation onNavigate={setView} />}
           {view === "sentences" && <MySentences onPractice={handlePracticeSentence} />}
           {view === "settings" && <SettingsView />}
@@ -46,4 +48,4 @@ export default function App() {
       </div>
     </AppStateProvider>
   );
-} 
+}

@@ -19,7 +19,12 @@ import {
   playTryAgainTone,
   playLevelUpFanfare,
 } from "../lib/audio/chimes";
-import { useAppState, levelFromXp } from "../state/AppStateContext";
+import {
+  useAppState,
+  levelFromXp,
+  REVIEW_CAPTURE_THRESHOLD,
+} from "../state/AppStateContext";
+import { ShuffleBag } from "../lib/shuffle";
 import { ScoreRing } from "../components/ScoreRing";
 import { WordDiff } from "../components/WordDiff";
 
@@ -66,6 +71,18 @@ export function ShadowingStudio({ practiceRequest }: ShadowingStudioProps) {
   const recognizerRef = useRef<SpeechRecognizer | null>(null);
   if (recognizerRef.current === null) {
     recognizerRef.current = new SpeechRecognizer();
+  }
+
+  // Anti-repetition engine: one shuffle bag per practice source guarantees
+  // full-cycle coverage and never serves the same sentence twice in a row
+  // (see lib/shuffle.ts for why plain Math.random() fails at this).
+  const lessonBagRef = useRef<ShuffleBag | null>(null);
+  if (lessonBagRef.current === null) {
+    lessonBagRef.current = new ShuffleBag();
+  }
+  const mineBagRef = useRef<ShuffleBag | null>(null);
+  if (mineBagRef.current === null) {
+    mineBagRef.current = new ShuffleBag();
   }
 
   // Hand-off from "My Sentences": jump straight to that sentence.
@@ -168,6 +185,15 @@ export function ShadowingStudio({ practiceRequest }: ShadowingStudioProps) {
           score: result.accuracy,
         });
       }
+      // SRS capture: weak takes are routed into the persistent review queue
+      // automatically — the user never has to remember what they struggled on.
+      if (result.accuracy < REVIEW_CAPTURE_THRESHOLD) {
+        dispatch({
+          type: "ADD_REVIEW_ITEM",
+          text: currentSentence.text,
+          score: result.accuracy,
+        });
+      }
 
       if (settings.soundEffects) {
         if (leveledUp) playLevelUpFanfare();
@@ -207,12 +233,21 @@ export function ShadowingStudio({ practiceRequest }: ShadowingStudioProps) {
 
   const goToNext = useCallback(() => {
     resetTake();
+    // Draw OUTSIDE the setState updater: bag.draw() mutates the bag, and
+    // React StrictMode double-invokes updater functions, which would silently
+    // consume two cards per click if the draw lived inside the updater.
     if (sourceMode === "mine") {
-      setMineIndex((i) => (sentences.length > 0 ? (i + 1) % sentences.length : 0));
+      const next =
+        sentences.length > 0
+          ? (mineBagRef.current?.draw(sentences.length, mineIndex) ?? 0)
+          : 0;
+      setMineIndex(next);
     } else {
-      setLessonIndex((i) => (i + 1) % category.sentences.length);
+      const next =
+        lessonBagRef.current?.draw(category.sentences.length, lessonIndex) ?? 0;
+      setLessonIndex(next);
     }
-  }, [resetTake, sourceMode, sentences.length, category.sentences.length]);
+  }, [resetTake, sourceMode, sentences.length, mineIndex, category.sentences.length, lessonIndex]);
 
   const recognitionAvailable = isRecognitionSupported();
 
@@ -258,6 +293,9 @@ export function ShadowingStudio({ practiceRequest }: ShadowingStudioProps) {
               onChange={(e) => {
                 setCategoryId(e.target.value);
                 setLessonIndex(0);
+                // New category = new deck: same-length categories would
+                // otherwise keep dealing the previous category's cycle.
+                lessonBagRef.current?.reset();
                 resetTake();
               }}
               aria-label="Lesson category"

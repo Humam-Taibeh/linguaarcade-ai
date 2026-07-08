@@ -1,6 +1,6 @@
 /**
  * Central application state: profile (XP / streak), custom sentences, session
- * history, and settings.
+ * history, the SRS review queue, and settings.
  *
  * Why Context + useReducer instead of a state library: the state is one small
  * document with a handful of well-defined transitions. A reducer gives us
@@ -16,8 +16,24 @@ import {
   type Dispatch,
   type ReactNode,
 } from "react";
-import type { AppState, Profile, SessionRecord, Sentence, Settings } from "../types";
+import type {
+  AppState,
+  Profile,
+  ReviewItem,
+  SessionRecord,
+  Sentence,
+  Settings,
+} from "../types";
 import { loadPersistedState, savePersistedState } from "../lib/storage";
+
+// ---------------------------------------------------------------------------
+// SRS thresholds
+// ---------------------------------------------------------------------------
+
+/** A shadowing take below this accuracy is captured into the review queue. */
+export const REVIEW_CAPTURE_THRESHOLD = 60;
+/** A Review Studio attempt at or above this accuracy clears the item (green). */
+export const REVIEW_CLEAR_THRESHOLD = 85;
 
 // ---------------------------------------------------------------------------
 // Defaults
@@ -37,17 +53,21 @@ const DEFAULT_SETTINGS: Settings = {
   speechRate: 0.9,
   strictness: "standard",
   soundEffects: true,
+  theme: "dark",
 };
 
 export const INITIAL_STATE: AppState = {
   profile: DEFAULT_PROFILE,
   sentences: [],
   sessions: [],
+  reviewQueue: [],
   settings: DEFAULT_SETTINGS,
 };
 
 /** Keep only the most recent session records to bound LocalStorage growth. */
 const MAX_SESSION_HISTORY = 100;
+/** Hard cap on the SRS queue: past this size, more captures would be noise. */
+const MAX_REVIEW_QUEUE = 50;
 
 // ---------------------------------------------------------------------------
 // Leveling math
@@ -102,6 +122,8 @@ export type Action =
   | { type: "ADD_SENTENCES"; texts: string[] }
   | { type: "DELETE_SENTENCE"; id: string }
   | { type: "UPDATE_SENTENCE_STATS"; id: string; score: number }
+  | { type: "ADD_REVIEW_ITEM"; text: string; score: number }
+  | { type: "REVIEW_ATTEMPT"; id: string; score: number }
   | { type: "UPDATE_SETTINGS"; settings: Partial<Settings> }
   | { type: "RESET_ALL" };
 
@@ -203,6 +225,52 @@ export function appReducer(state: AppState, action: Action): AppState {
         ),
       };
 
+    case "ADD_REVIEW_ITEM": {
+      const text = action.text.trim();
+      if (!text) return state;
+      // Deduplicate by exact text: failing the same phrase again just
+      // refreshes its score instead of flooding the queue with copies.
+      const existing = state.reviewQueue.find((item) => item.text === text);
+      if (existing) {
+        return {
+          ...state,
+          reviewQueue: state.reviewQueue.map((item) =>
+            item.id === existing.id ? { ...item, lastScore: action.score } : item
+          ),
+        };
+      }
+      const item: ReviewItem = {
+        id: makeId(),
+        text,
+        lastScore: action.score,
+        attempts: 0,
+        addedAt: new Date().toISOString(),
+      };
+      return {
+        ...state,
+        reviewQueue: [...state.reviewQueue, item].slice(0, MAX_REVIEW_QUEUE),
+      };
+    }
+
+    case "REVIEW_ATTEMPT": {
+      // Green take → the item graduates out of the queue. Anything less
+      // records the attempt so the user sees their trajectory on the card.
+      if (action.score >= REVIEW_CLEAR_THRESHOLD) {
+        return {
+          ...state,
+          reviewQueue: state.reviewQueue.filter((item) => item.id !== action.id),
+        };
+      }
+      return {
+        ...state,
+        reviewQueue: state.reviewQueue.map((item) =>
+          item.id === action.id
+            ? { ...item, attempts: item.attempts + 1, lastScore: action.score }
+            : item
+        ),
+      };
+    }
+
     case "UPDATE_SETTINGS":
       return {
         ...state,
@@ -235,7 +303,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     appReducer,
     undefined,
     // Lazy initializer: read LocalStorage exactly once, merging over defaults
-    // so newly added settings fields get sane values on old saved documents.
+    // so newly added fields (theme, reviewQueue, ...) get sane values on
+    // documents saved by older versions of the app.
     (): AppState => {
       const persisted = loadPersistedState();
       if (!persisted) return INITIAL_STATE;
@@ -243,6 +312,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         profile: { ...DEFAULT_PROFILE, ...persisted.profile },
         sentences: persisted.sentences ?? [],
         sessions: persisted.sessions ?? [],
+        reviewQueue: persisted.reviewQueue ?? [],
         settings: { ...DEFAULT_SETTINGS, ...persisted.settings },
       };
     }
@@ -253,6 +323,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     savePersistedState(state);
   }, [state]);
+
+  // Theme is applied as a root attribute so pure CSS handles every color
+  // swap ([data-theme] token blocks in global.css) — no React re-styling.
+  // index.html sets the same attribute pre-paint to avoid a theme flash.
+  useEffect(() => {
+    document.documentElement.dataset.theme = state.settings.theme;
+  }, [state.settings.theme]);
 
   const value = useMemo(() => ({ state, dispatch }), [state]);
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

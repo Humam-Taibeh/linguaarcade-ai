@@ -8,10 +8,19 @@
  */
 
 /** Top-level navigation targets rendered by <App/>. */
-export type View = "dashboard" | "shadowing" | "conversation" | "sentences" | "settings";
+export type View =
+  | "dashboard"
+  | "shadowing"
+  | "review"
+  | "conversation"
+  | "sentences"
+  | "settings";
 
 /** How harshly the pronunciation scorer judges near-misses. */
 export type Strictness = "standard" | "strict";
+
+/** UI color theme. Persisted so the choice survives reloads on every device. */
+export type ThemeMode = "dark" | "light";
 
 /** A user-authored practice sentence from the "My Sentences" module. */
 export interface Sentence {
@@ -34,6 +43,22 @@ export interface SessionRecord {
   completedAt: string; // ISO timestamp
 }
 
+/**
+ * A phrase captured by the Spaced Repetition System. Any shadowing take that
+ * scores below the capture threshold lands here, and the item survives until
+ * the user re-shadows it at green level (see REVIEW_* constants in the state
+ * module). Persisting the queue makes weak phrases impossible to "lose".
+ */
+export interface ReviewItem {
+  id: string;
+  text: string;
+  /** The most recent (failing) accuracy — shows the user how close they are. */
+  lastScore: number;
+  /** Re-shadowing attempts made from the Review Studio. */
+  attempts: number;
+  addedAt: string; // ISO timestamp
+}
+
 /** Gamification profile: XP is the single source of truth, level is derived. */
 export interface Profile {
   xp: number;
@@ -53,6 +78,7 @@ export interface Settings {
   speechRate: number;
   strictness: Strictness;
   soundEffects: boolean;
+  theme: ThemeMode;
 }
 
 /** The entire persisted application state (LocalStorage document). */
@@ -60,6 +86,7 @@ export interface AppState {
   profile: Profile;
   sentences: Sentence[];
   sessions: SessionRecord[];
+  reviewQueue: ReviewItem[];
   settings: Settings;
 }
 

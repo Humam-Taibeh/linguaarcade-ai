@@ -31,13 +31,13 @@ export function ScoreRing({ score, size = 132, label = "Accuracy" }: ScoreRingPr
   return (
     <div className="score-ring-wrap" role="img" aria-label={`${label}: ${clamped} percent`}>
       <svg width={size} height={size}>
-        {/* Track */}
+        {/* Track — token-driven so it stays visible in both themes. */}
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="rgba(255, 255, 255, 0.08)"
+          stroke="var(--ring-track)"
           strokeWidth={strokeWidth}
         />
         {/* Progress arc, rotated so it starts at 12 o'clock. */}

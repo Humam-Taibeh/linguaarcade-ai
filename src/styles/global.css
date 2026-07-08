@@ -1,22 +1,59 @@
 /*
- * LinguaArcade AI — global design system.
+ * LinguaArcade AI — global design system (dual-theme edition).
  *
- * Philosophy: one dark, luminous surface language. All colors derive from a
- * small token set below; components never hardcode hex values. Glassmorphism
- * is applied through the shared .glass primitive so blur/border treatment
- * stays perfectly consistent across every panel.
+ * Architecture: every color in the app resolves through the token blocks
+ * below. Components NEVER hardcode a color — they consume semantic tokens
+ * (--text-primary, --success-bg, --border-glass, ...), so flipping
+ * `data-theme` on <html> re-skins the entire SPA with zero JavaScript
+ * restyling and zero component changes.
+ *
+ * Contrast policy (WCAG AA): body text tokens are chosen for ≥ 4.5:1 against
+ * their surfaces (dark: #eef1fb on #070a14 ≈ 15:1, secondary #9aa3c0 ≈ 7:1;
+ * light: #182033 on #f4f6fb ≈ 13:1, secondary #46516b ≈ 7:1). Semantic
+ * colors (success/warning/danger) use darker ink values in light mode
+ * because the neon values that glow on dark fail AA on white.
  *
  * The font stack is intentionally system-native: zero font downloads keeps
  * first paint instant and the app fully offline-capable.
  */
 
+/* ---------------------------------------------------------------------------
+ * Theme-independent tokens (shape, motion, typography)
+ * ------------------------------------------------------------------------- */
+
 :root {
-  /* --- Color tokens --- */
+  --radius-lg: 18px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+  --transition-fast: 160ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 320ms cubic-bezier(0.4, 0, 0.2, 1);
+  /* Theme cross-fade: applied to backgrounds/borders app-wide (see below). */
+  --transition-theme: 280ms ease;
+
+  --font-stack: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont,
+    "Inter", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+}
+
+/* ---------------------------------------------------------------------------
+ * DARK theme (default): deep cyber-blue + luminous indigo/teal auroras.
+ * Declared on bare :root too so the app is styled even before JS runs.
+ * ------------------------------------------------------------------------- */
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
   --bg-base: #070a14;
   --bg-glow-1: rgba(124, 108, 255, 0.13); /* indigo aurora */
   --bg-glow-2: rgba(56, 224, 212, 0.09);  /* teal aurora */
+
   --surface-glass: rgba(255, 255, 255, 0.045);
   --surface-glass-strong: rgba(255, 255, 255, 0.08);
+  --surface-sidebar: rgba(10, 13, 26, 0.72);
+  --surface-input: rgba(0, 0, 0, 0.28);
+  --menu-bg: #10142a;
+
   --border-glass: rgba(255, 255, 255, 0.09);
   --border-glass-bright: rgba(255, 255, 255, 0.18);
 
@@ -28,22 +65,95 @@
   --accent-bright: #998cff;
   --accent-2: #38e0d4;
   --gradient-accent: linear-gradient(135deg, #7c6cff 0%, #38e0d4 100%);
+  /* Ink used ON TOP of the accent gradient: dark ink on bright neon. */
+  --on-accent: #0a0d1a;
+  --accent-tint-bg: rgba(124, 108, 255, 0.18);
+  --accent-tint-border: rgba(124, 108, 255, 0.35);
+  --glow-accent: rgba(124, 108, 255, 0.45);
 
   --success: #34d97b;
+  --success-bg: rgba(52, 217, 123, 0.1);
+  --success-border: rgba(52, 217, 123, 0.28);
+
   --warning: #f5b94d;
+  --warning-bg: rgba(245, 185, 77, 0.09);
+  --warning-border: rgba(245, 185, 77, 0.3);
+
   --danger: #ff5d73;
+  --danger-bg: rgba(255, 93, 115, 0.11);
+  --danger-border: rgba(255, 93, 115, 0.35);
 
-  /* --- Shape & motion tokens --- */
-  --radius-lg: 18px;
-  --radius-md: 12px;
-  --radius-sm: 8px;
-  --transition-fast: 160ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 320ms cubic-bezier(0.4, 0, 0.2, 1);
+  --info: #38e0d4;
+  --info-bg: rgba(56, 224, 212, 0.08);
+  --info-border: rgba(56, 224, 212, 0.3);
 
-  --font-stack: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont,
-    "Inter", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  --ring-track: rgba(255, 255, 255, 0.08);
+  --shadow-card: rgba(0, 0, 0, 0.35);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.12);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
 }
+
+/* ---------------------------------------------------------------------------
+ * LIGHT theme: crisp premium slate/white with soft teal/lavender lighting.
+ * Same token names, re-inked for a bright surface; glass panels become
+ * translucent white with cool slate borders instead of white-on-black haze.
+ * ------------------------------------------------------------------------- */
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-base: #f2f4fa;
+  --bg-glow-1: rgba(91, 73, 240, 0.09);  /* soft lavender lighting */
+  --bg-glow-2: rgba(11, 143, 133, 0.07); /* soft teal lighting */
+
+  --surface-glass: rgba(255, 255, 255, 0.62);
+  --surface-glass-strong: rgba(255, 255, 255, 0.85);
+  --surface-sidebar: rgba(255, 255, 255, 0.72);
+  --surface-input: rgba(255, 255, 255, 0.8);
+  --menu-bg: #ffffff;
+
+  --border-glass: rgba(23, 32, 60, 0.1);
+  --border-glass-bright: rgba(23, 32, 60, 0.2);
+
+  --text-primary: #182033;
+  --text-secondary: #46516b;
+  --text-faint: #7c86a3;
+
+  --accent: #5847e8;
+  --accent-bright: #4636cf;
+  --accent-2: #0b8f85;
+  --gradient-accent: linear-gradient(135deg, #5847e8 0%, #0b8f85 100%);
+  /* Light theme's gradient is deep enough that white ink passes AA on it. */
+  --on-accent: #ffffff;
+  --accent-tint-bg: rgba(88, 71, 232, 0.1);
+  --accent-tint-border: rgba(88, 71, 232, 0.3);
+  --glow-accent: rgba(88, 71, 232, 0.28);
+
+  --success: #0e7a45;
+  --success-bg: rgba(14, 122, 69, 0.09);
+  --success-border: rgba(14, 122, 69, 0.3);
+
+  --warning: #8a5b00;
+  --warning-bg: rgba(154, 107, 0, 0.09);
+  --warning-border: rgba(154, 107, 0, 0.32);
+
+  --danger: #c2274b;
+  --danger-bg: rgba(194, 39, 75, 0.08);
+  --danger-border: rgba(194, 39, 75, 0.3);
+
+  --info: #086e66;
+  --info-bg: rgba(11, 143, 133, 0.08);
+  --info-border: rgba(11, 143, 133, 0.3);
+
+  --ring-track: rgba(23, 32, 60, 0.1);
+  --shadow-card: rgba(23, 32, 60, 0.12);
+  --scrollbar-thumb: rgba(23, 32, 60, 0.2);
+  --scrollbar-thumb-hover: rgba(23, 32, 60, 0.34);
+}
+
+/* ---------------------------------------------------------------------------
+ * Base
+ * ------------------------------------------------------------------------- */
 
 *,
 *::before,
@@ -58,17 +168,40 @@ body {
   min-height: 100%;
 }
 
+html {
+  background: var(--bg-base);
+  /* Mobile polish: kill the grey tap flash and rubber-band chaining. */
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   font-family: var(--font-stack);
   color: var(--text-primary);
   background-color: var(--bg-base);
-  /* Two fixed radial "aurora" glows give the dark theme depth without images. */
+  /* Two fixed radial "aurora" glows give both themes depth without images. */
   background-image:
     radial-gradient(900px 600px at 12% -10%, var(--bg-glow-1), transparent 60%),
     radial-gradient(800px 600px at 105% 110%, var(--bg-glow-2), transparent 60%);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   line-height: 1.55;
+  overscroll-behavior-y: none;
+  transition: background-color var(--transition-theme), color var(--transition-theme);
+}
+
+/* Smoothly cross-fade surfaces when the theme flips. Scoped to the properties
+ * that actually change so it never fights component micro-interactions. */
+.glass,
+.sidebar,
+.input,
+.select,
+textarea.input,
+.btn,
+.msg,
+.pill {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 280ms;
+  transition-timing-function: ease;
 }
 
 /* ---------------------------------------------------------------------------
@@ -78,12 +211,15 @@ body {
 .app-shell {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh; /* dynamic viewport: correct under mobile URL bars */
 }
 
 .main-content {
   flex: 1;
   min-width: 0; /* allow flex children to shrink instead of overflowing */
   padding: 32px clamp(16px, 4vw, 48px) 64px;
+  /* Respect notches / home-indicator on standalone mobile deployments. */
+  padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
   max-width: 1160px;
   margin: 0 auto;
 }
@@ -111,10 +247,11 @@ body {
   position: sticky;
   top: 0;
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   padding: 24px 14px;
-  background: rgba(10, 13, 26, 0.72);
+  background: var(--surface-sidebar);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-right: 1px solid var(--border-glass);
@@ -139,8 +276,9 @@ body {
   place-items: center;
   font-size: 0.78rem;
   font-weight: 800;
-  color: #0a0d1a;
-  box-shadow: 0 0 18px rgba(124, 108, 255, 0.45);
+  color: var(--on-accent);
+  box-shadow: 0 0 18px var(--glow-accent);
+  flex-shrink: 0;
 }
 
 .brand-gradient-text {
@@ -155,6 +293,7 @@ body {
   align-items: center;
   gap: 12px;
   width: 100%;
+  min-height: 44px; /* WCAG / mobile touch-target floor */
   padding: 11px 14px;
   margin-bottom: 4px;
   border: 1px solid transparent;
@@ -166,6 +305,7 @@ body {
   font-weight: 500;
   text-align: left;
   cursor: pointer;
+  touch-action: manipulation;
   transition: background var(--transition-fast), color var(--transition-fast),
     border-color var(--transition-fast);
 }
@@ -188,6 +328,20 @@ body {
   text-align: center;
 }
 
+/* SRS queue counter on the Review Studio nav entry. */
+.nav-badge {
+  margin-left: auto;
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  color: var(--danger);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+}
+
 .sidebar-footer {
   margin-top: auto;
   padding: 14px;
@@ -206,6 +360,53 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
+ * Theme toggle — animated sun/moon cross-fade.
+ * Both glyphs occupy the same cell; the inactive one rotates away and fades,
+ * so the flip reads as one continuous motion. Pure CSS keyed off [data-theme].
+ * ------------------------------------------------------------------------- */
+
+.theme-toggle {
+  position: relative;
+  margin-left: auto;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-glass);
+  background: var(--surface-glass);
+  cursor: pointer;
+  touch-action: manipulation;
+  overflow: hidden;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.theme-toggle:hover {
+  border-color: var(--border-glass-bright);
+  box-shadow: 0 0 12px var(--glow-accent);
+}
+
+.theme-icon {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.05rem;
+  transition: opacity 280ms ease, transform 420ms cubic-bezier(0.34, 1.4, 0.5, 1);
+}
+
+/* Dark theme: moon showing, sun spun away — and vice versa. */
+:root[data-theme="dark"] .theme-icon.sun,
+:root:not([data-theme="light"]) .theme-icon.sun {
+  opacity: 0;
+  transform: rotate(120deg) scale(0.4);
+}
+
+:root[data-theme="light"] .theme-icon.moon {
+  opacity: 0;
+  transform: rotate(-120deg) scale(0.4);
+}
+
+/* ---------------------------------------------------------------------------
  * Glass primitive & cards
  * ------------------------------------------------------------------------- */
 
@@ -216,14 +417,14 @@ body {
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   padding: 22px;
-  transition: border-color var(--transition-fast), transform var(--transition-fast),
-    box-shadow var(--transition-fast);
 }
 
 .glass.hoverable:hover {
   border-color: var(--border-glass-bright);
   transform: translateY(-2px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 12px 32px var(--shadow-card);
+  transition: border-color var(--transition-fast), transform var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .card-title {
@@ -242,7 +443,8 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 11px 20px;
+  min-height: 44px; /* bulletproof touch target on phones */
+  padding: 10px 20px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-glass-bright);
   background: var(--surface-glass-strong);
@@ -251,6 +453,7 @@ body {
   font-size: 0.92rem;
   font-weight: 600;
   cursor: pointer;
+  touch-action: manipulation;
   transition: transform var(--transition-fast), box-shadow var(--transition-fast),
     background var(--transition-fast), opacity var(--transition-fast);
   user-select: none;
@@ -272,12 +475,12 @@ body {
 .btn-primary {
   background: var(--gradient-accent);
   border: none;
-  color: #0a0d1a;
-  box-shadow: 0 4px 22px rgba(124, 108, 255, 0.35);
+  color: var(--on-accent);
+  box-shadow: 0 4px 22px var(--glow-accent);
 }
 
 .btn-primary:hover:not(:disabled) {
-  box-shadow: 0 6px 28px rgba(124, 108, 255, 0.5);
+  box-shadow: 0 6px 28px var(--glow-accent);
 }
 
 .btn-ghost {
@@ -292,13 +495,13 @@ body {
 }
 
 .btn-danger {
-  background: rgba(255, 93, 115, 0.12);
-  border-color: rgba(255, 93, 115, 0.4);
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
   color: var(--danger);
 }
 
 .btn-recording {
-  background: rgba(255, 93, 115, 0.16);
+  background: var(--danger-bg);
   border: 1px solid var(--danger);
   color: var(--danger);
   animation: pulse-recording 1.4s ease-in-out infinite;
@@ -307,10 +510,10 @@ body {
 @keyframes pulse-recording {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(255, 93, 115, 0.45);
+    box-shadow: 0 0 0 0 var(--danger-border);
   }
   50% {
-    box-shadow: 0 0 0 10px rgba(255, 93, 115, 0);
+    box-shadow: 0 0 0 10px transparent;
   }
 }
 
@@ -340,22 +543,22 @@ body {
 .select,
 textarea.input {
   width: 100%;
+  min-height: 44px;
   padding: 11px 14px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-glass);
-  background: rgba(0, 0, 0, 0.28);
+  background: var(--surface-input);
   color: var(--text-primary);
   font: inherit;
   font-size: 0.92rem;
   outline: none;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .input:focus,
 .select:focus,
 textarea.input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(124, 108, 255, 0.22);
+  box-shadow: 0 0 0 3px var(--accent-tint-bg);
 }
 
 textarea.input {
@@ -365,13 +568,18 @@ textarea.input {
 }
 
 .select option {
-  background: #10142a;
+  background: var(--menu-bg);
   color: var(--text-primary);
 }
 
 input[type="range"].slider {
   accent-color: var(--accent);
   width: 100%;
+  min-height: 32px;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--accent);
 }
 
 /* ---------------------------------------------------------------------------
@@ -401,26 +609,26 @@ input[type="range"].slider {
 
 .word-chip.correct {
   color: var(--success);
-  background: rgba(52, 217, 123, 0.1);
-  border-color: rgba(52, 217, 123, 0.28);
+  background: var(--success-bg);
+  border-color: var(--success-border);
 }
 
 .word-chip.partial {
   color: var(--warning);
-  background: rgba(245, 185, 77, 0.1);
-  border-color: rgba(245, 185, 77, 0.3);
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
 }
 
 .word-chip.wrong {
   color: var(--danger);
-  background: rgba(255, 93, 115, 0.1);
-  border-color: rgba(255, 93, 115, 0.32);
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
 }
 
 .word-chip.missing {
   color: var(--danger);
   background: transparent;
-  border-color: rgba(255, 93, 115, 0.4);
+  border-color: var(--danger-border);
   border-style: dashed;
   opacity: 0.85;
 }
@@ -466,12 +674,6 @@ input[type="range"].slider {
   gap: 4px;
 }
 
-.score-ring-value {
-  font-size: 1.6rem;
-  font-weight: 750;
-  letter-spacing: -0.02em;
-}
-
 .score-ring-label {
   font-size: 0.74rem;
   text-transform: uppercase;
@@ -481,6 +683,75 @@ input[type="range"].slider {
 
 .score-ring-progress {
   transition: stroke-dashoffset 700ms cubic-bezier(0.34, 1.3, 0.5, 1), stroke 300ms ease;
+}
+
+/* ---------------------------------------------------------------------------
+ * Voice wave visualizer (conversation voice loop)
+ * ------------------------------------------------------------------------- */
+
+.voice-wave {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+}
+
+.voice-bar {
+  width: 5px;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--text-faint);
+  transform: scaleY(0.18);
+  transform-origin: center;
+}
+
+/* AI speaking: indigo wave. User's turn (mic hot): teal wave. */
+.voice-wave.speaking .voice-bar {
+  background: var(--accent);
+  animation: wave-pulse 900ms ease-in-out infinite;
+}
+
+.voice-wave.listening .voice-bar {
+  background: var(--accent-2);
+  animation: wave-pulse 700ms ease-in-out infinite;
+}
+
+@keyframes wave-pulse {
+  0%,
+  100% {
+    transform: scaleY(0.18);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.voice-loop-panel {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  border-radius: var(--radius-md);
+  background: var(--accent-tint-bg);
+  border: 1px solid var(--accent-tint-border);
+  animation: fade-in-up 260ms ease both;
+}
+
+.voice-loop-status {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.voice-loop-transcript {
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
 }
 
 /* ---------------------------------------------------------------------------
@@ -516,7 +787,7 @@ input[type="range"].slider {
 .xp-bar {
   height: 10px;
   border-radius: 99px;
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--ring-track);
   overflow: hidden;
   margin-top: 12px;
 }
@@ -525,7 +796,7 @@ input[type="range"].slider {
   height: 100%;
   border-radius: 99px;
   background: var(--gradient-accent);
-  box-shadow: 0 0 12px rgba(124, 108, 255, 0.6);
+  box-shadow: 0 0 12px var(--glow-accent);
   transition: width 600ms cubic-bezier(0.34, 1.3, 0.5, 1);
 }
 
@@ -599,26 +870,30 @@ input[type="range"].slider {
 
 .pill.success {
   color: var(--success);
-  border-color: rgba(52, 217, 123, 0.4);
+  border-color: var(--success-border);
+  background: var(--success-bg);
 }
 
 .pill.warning {
   color: var(--warning);
-  border-color: rgba(245, 185, 77, 0.4);
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
 }
 
 .pill.danger {
   color: var(--danger);
-  border-color: rgba(255, 93, 115, 0.4);
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
 }
 
 .pill.accent {
   color: var(--accent-bright);
-  border-color: rgba(124, 108, 255, 0.5);
+  border-color: var(--accent-tint-border);
+  background: var(--accent-tint-bg);
 }
 
 /* ---------------------------------------------------------------------------
- * Chat (AI conversation)
+ * Chat (AI conversation + imported dialogue scenes)
  * ------------------------------------------------------------------------- */
 
 .chat-window {
@@ -628,6 +903,8 @@ input[type="range"].slider {
   min-height: 320px;
   max-height: 56vh;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch; /* momentum scrolling on iOS */
+  overscroll-behavior: contain; /* don't chain-scroll the page behind it */
   padding: 4px 6px 4px 2px;
   margin-bottom: 16px;
 }
@@ -642,8 +919,8 @@ input[type="range"].slider {
 
 .msg.user {
   align-self: flex-end;
-  background: rgba(124, 108, 255, 0.18);
-  border: 1px solid rgba(124, 108, 255, 0.35);
+  background: var(--accent-tint-bg);
+  border: 1px solid var(--accent-tint-border);
   border-bottom-right-radius: 6px;
 }
 
@@ -654,12 +931,22 @@ input[type="range"].slider {
   border-bottom-left-radius: 6px;
 }
 
+.msg .speaker-tag {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 4px;
+}
+
 .correction-card {
   margin-top: 10px;
   padding: 10px 12px;
   border-radius: var(--radius-md);
-  background: rgba(245, 185, 77, 0.08);
-  border: 1px solid rgba(245, 185, 77, 0.28);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
   font-size: 0.84rem;
 }
 
@@ -698,7 +985,39 @@ input[type="range"].slider {
 }
 
 /* ---------------------------------------------------------------------------
- * Shadowing studio
+ * Offline bridge (prompt generator + ingestion board)
+ * ------------------------------------------------------------------------- */
+
+.prompt-box {
+  margin: 0;
+  padding: 16px;
+  max-height: 300px;
+  overflow: auto;
+  border-radius: var(--radius-md);
+  background: var(--surface-input);
+  border: 1px solid var(--border-glass);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.dialogue-scene {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.dialogue-actions {
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Shadowing / Review studio
  * ------------------------------------------------------------------------- */
 
 .target-sentence {
@@ -733,8 +1052,20 @@ input[type="range"].slider {
   animation: fade-in-up 320ms ease both;
 }
 
+.cleared-banner {
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
+  color: var(--success);
+  font-weight: 600;
+  font-size: 0.92rem;
+  margin-bottom: 16px;
+  animation: fade-in-up 300ms ease both;
+}
+
 /* ---------------------------------------------------------------------------
- * Sentences list
+ * Sentences / review list items
  * ------------------------------------------------------------------------- */
 
 .sentence-item {
@@ -784,8 +1115,8 @@ input[type="range"].slider {
 .error-banner {
   padding: 12px 16px;
   border-radius: var(--radius-md);
-  background: rgba(255, 93, 115, 0.1);
-  border: 1px solid rgba(255, 93, 115, 0.35);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
   color: var(--danger);
   font-size: 0.88rem;
   margin-bottom: 16px;
@@ -794,9 +1125,9 @@ input[type="range"].slider {
 .info-banner {
   padding: 12px 16px;
   border-radius: var(--radius-md);
-  background: rgba(56, 224, 212, 0.08);
-  border: 1px solid rgba(56, 224, 212, 0.3);
-  color: var(--accent-2);
+  background: var(--info-bg);
+  border: 1px solid var(--info-border);
+  color: var(--info);
   font-size: 0.88rem;
   margin-bottom: 16px;
 }
@@ -833,7 +1164,7 @@ input[type="range"].slider {
   }
 }
 
-/* Custom scrollbars to match the dark glass aesthetic. */
+/* Custom scrollbars to match both themes. */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -844,15 +1175,26 @@ input[type="range"].slider {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--scrollbar-thumb);
   border-radius: 99px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--scrollbar-thumb-hover);
   background-clip: content-box;
+}
+
+/* Reduced motion: honor the OS preference — animations become instant. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -867,14 +1209,18 @@ input[type="range"].slider {
   .sidebar {
     width: 100%;
     height: auto;
-    position: static;
+    position: sticky; /* keep nav reachable while scrolling long views */
+    top: 0;
+    z-index: 20;
     flex-direction: row;
     align-items: center;
     gap: 4px;
     padding: 10px 12px;
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
     border-right: none;
     border-bottom: 1px solid var(--border-glass);
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .brand {
@@ -897,6 +1243,15 @@ input[type="range"].slider {
     display: none;
   }
 
+  /* Keep the badge visible even when labels collapse to icons. */
+  .nav-badge {
+    margin-left: 2px;
+  }
+
+  .theme-toggle {
+    margin-left: 4px;
+  }
+
   .sidebar-footer {
     display: none;
   }
@@ -908,5 +1263,31 @@ input[type="range"].slider {
 
   .main-content {
     padding: 22px 16px 48px;
+    padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* iOS zooms the page when a focused input's font is < 16px — prevent it. */
+  .input,
+  .select,
+  textarea.input {
+    font-size: 1rem;
+  }
+
+  .chat-window {
+    max-height: 48vh;
+    max-height: 48dvh;
+  }
+
+  .msg {
+    max-width: 92%;
+  }
+
+  .target-sentence {
+    font-size: 1.2rem;
+  }
+
+  /* Full-width primary actions read better as thumb targets on phones. */
+  .controls-row .btn {
+    flex: 1 1 auto;
   }
 }

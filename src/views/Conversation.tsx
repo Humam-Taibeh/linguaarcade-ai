@@ -1,8 +1,16 @@
 /**
  * AI Conversation — a live English partner powered by the user's own Gemini
- * API key. Every learner message is checked for mistakes; corrections render
- * as inline cards under the tutor's reply, and each exchange earns XP so
- * conversation practice feeds the same streak/level economy as shadowing.
+ * API key, now with a hands-free Voice Notes loop.
+ *
+ * Voice loop architecture: send → reply → TTS finishes → microphone opens
+ * automatically → final transcript auto-sends → repeat. The chain is driven
+ * by awaited promises (speak() resolves exactly when playback ends), not
+ * timers, so the mic opens "the exact millisecond" TTS stops. A ref mirrors
+ * the voice-mode flag because the async continuations must consult the
+ * *current* value, not the one captured when the chain started.
+ *
+ * Without an API key, the view degrades gracefully into the Offline Bridge
+ * (prompt generator + response ingestion) instead of a dead end.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -10,11 +18,14 @@ import {
   GeminiError,
   type ChatMessage,
   type Correction,
+  type TutorReply,
 } from "../lib/gemini/client";
 import { SpeechRecognizer, isRecognitionSupported } from "../lib/speech/recognition";
 import { speak, stopSpeaking } from "../lib/speech/synthesis";
 import { playXpBlip } from "../lib/audio/chimes";
 import { useAppState } from "../state/AppStateContext";
+import { OfflineBridge } from "../components/OfflineBridge";
+import { VoiceWave, type WavePhase } from "../components/VoiceWave";
 import type { View } from "../types";
 
 interface DisplayMessage {
@@ -49,10 +60,22 @@ export function Conversation({ onNavigate }: ConversationProps) {
   const [speakReplies, setSpeakReplies] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // --- Voice Notes loop state -------------------------------------------
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [loopPhase, setLoopPhase] = useState<WavePhase>("idle");
+  const [loopTranscript, setLoopTranscript] = useState("");
+  // Ref mirror: async continuations (post-TTS, post-recognition) must read
+  // the live value, not a stale closure snapshot.
+  const voiceModeRef = useRef(false);
+
   const recognizerRef = useRef<SpeechRecognizer | null>(null);
   if (recognizerRef.current === null) {
     recognizerRef.current = new SpeechRecognizer();
   }
+
+  // Forward reference: startVoiceCapture needs sendMessage and vice versa.
+  // A ref breaks the cycle without disabling exhaustive callback typing.
+  const sendMessageRef = useRef<((text: string) => Promise<void>) | null>(null);
 
   const chatWindowRef = useRef<HTMLDivElement | null>(null);
 
@@ -65,37 +88,94 @@ export function Conversation({ onNavigate }: ConversationProps) {
   useEffect(() => {
     const recognizer = recognizerRef.current;
     return () => {
+      voiceModeRef.current = false;
       recognizer?.abort();
       stopSpeaking();
     };
   }, []);
 
-  const handleSend = useCallback(async () => {
-    const text = draft.trim();
-    if (!text || sending) return;
+  const stopVoiceMode = useCallback((reason?: string) => {
+    voiceModeRef.current = false;
+    setVoiceMode(false);
+    setLoopPhase("idle");
+    setLoopTranscript("");
+    recognizerRef.current?.abort();
+    stopSpeaking();
+    if (reason) setError(reason);
+  }, []);
 
-    setError(null);
-    setDraft("");
-    setSending(true);
-    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", text }]);
+  /** Open the microphone for one hands-free turn of the voice loop. */
+  const startVoiceCapture = useCallback(() => {
+    const recognizer = recognizerRef.current;
+    if (!recognizer || !voiceModeRef.current) return;
 
-    // Rebuild API-shaped history from what is on screen. Model turns include
-    // the follow-up question so the tutor remembers what it asked.
-    const history: ChatMessage[] = messages.map((m) => ({
-      role: m.role,
-      text: m.followUpQuestion ? `${m.text} ${m.followUpQuestion}` : m.text,
-    }));
+    setLoopTranscript("");
+    setLoopPhase("listening");
 
-    try {
-      const reply = await sendTutorMessage(settings.geminiApiKey, history, text);
+    recognizer.start({
+      onInterim: setLoopTranscript,
+      onFinal: (transcript) => {
+        setLoopPhase("idle");
+        setLoopTranscript("");
+        if (!voiceModeRef.current) return;
+        const text = transcript.trim();
+        if (text) {
+          // Auto-send: this is what makes the loop truly hands-free.
+          void sendMessageRef.current?.(text);
+        } else {
+          // Silence means the user stepped away — pause rather than spin an
+          // infinite open-mic loop that burns battery and recognition quota.
+          stopVoiceMode("Voice loop paused — I didn't hear anything. Tap 🎧 to resume.");
+        }
+      },
+      onError: (code) => {
+        stopVoiceMode(
+          code === "not-allowed"
+            ? "Microphone access was denied. Allow it in your browser's site settings."
+            : `Speech recognition error: ${code}`
+        );
+      },
+    });
+  }, [stopVoiceMode]);
+
+  const sendMessage = useCallback(
+    async (text: string) => {
+      const content = text.trim();
+      if (!content || sending) return;
+
+      setError(null);
+      setSending(true);
+      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", text: content }]);
+
+      // Rebuild API-shaped history from what is on screen. Model turns include
+      // the follow-up question so the tutor remembers what it asked.
+      const history: ChatMessage[] = messages.map((m) => ({
+        role: m.role,
+        text: m.followUpQuestion ? `${m.text} ${m.followUpQuestion}` : m.text,
+      }));
+
+      let reply: TutorReply | null = null;
+      try {
+        reply = await sendTutorMessage(settings.geminiApiKey, history, content);
+      } catch (err) {
+        setError(err instanceof GeminiError ? err.message : "Unexpected error — try again.");
+        if (voiceModeRef.current) stopVoiceMode();
+      } finally {
+        setSending(false);
+      }
+      if (!reply) return;
+      // Re-bind to a const: TS won't narrow a `let` inside the state-updater
+      // closure below, and the loop code reads these fields repeatedly.
+      const tutorReply = reply;
+
       setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
           role: "model",
-          text: reply.reply,
-          corrections: reply.corrections,
-          followUpQuestion: reply.followUpQuestion,
+          text: tutorReply.reply,
+          corrections: tutorReply.corrections,
+          followUpQuestion: tutorReply.followUpQuestion,
         },
       ]);
 
@@ -105,22 +185,48 @@ export function Conversation({ onNavigate }: ConversationProps) {
         kind: "conversation",
         accuracy: null,
         xpEarned: XP_PER_EXCHANGE,
-        textPreview: text,
+        textPreview: content,
       });
       if (settings.soundEffects) playXpBlip();
 
-      if (speakReplies) {
-        void speak(`${reply.reply} ${reply.followUpQuestion}`.trim(), {
+      const spokenText = `${tutorReply.reply} ${tutorReply.followUpQuestion}`.trim();
+      if (voiceModeRef.current) {
+        // The awaited speak() is the timing heart of the loop: it resolves on
+        // the utterance's `end` event, so capture starts the moment TTS stops.
+        setLoopPhase("speaking");
+        await speak(spokenText, {
+          voiceURI: settings.voiceURI || undefined,
+          rate: settings.speechRate,
+        });
+        setLoopPhase("idle");
+        if (voiceModeRef.current) startVoiceCapture();
+      } else if (speakReplies) {
+        void speak(spokenText, {
           voiceURI: settings.voiceURI || undefined,
           rate: settings.speechRate,
         });
       }
-    } catch (err) {
-      setError(err instanceof GeminiError ? err.message : "Unexpected error — try again.");
-    } finally {
-      setSending(false);
+    },
+    [sending, messages, settings, dispatch, speakReplies, startVoiceCapture, stopVoiceMode]
+  );
+
+  // Keep the ref pointing at the freshest sendMessage (it recreates whenever
+  // messages/settings change; the voice loop must always call the newest one).
+  useEffect(() => {
+    sendMessageRef.current = sendMessage;
+  }, [sendMessage]);
+
+  const toggleVoiceMode = useCallback(() => {
+    if (voiceModeRef.current) {
+      stopVoiceMode();
+      return;
     }
-  }, [draft, sending, messages, settings, dispatch, speakReplies]);
+    setError(null);
+    voiceModeRef.current = true;
+    setVoiceMode(true);
+    // The user opens the loop by speaking first — mic goes hot immediately.
+    startVoiceCapture();
+  }, [startVoiceCapture, stopVoiceMode]);
 
   const handleDictate = useCallback(() => {
     const recognizer = recognizerRef.current;
@@ -152,29 +258,41 @@ export function Conversation({ onNavigate }: ConversationProps) {
     });
   }, [dictating]);
 
+  const handleSendClick = () => {
+    const text = draft;
+    setDraft("");
+    void sendMessage(text);
+  };
+
   const hasKey = settings.geminiApiKey.trim().length > 0;
 
   return (
     <div className="fade-in">
       <h1 className="view-header">AI Conversation</h1>
       <p className="view-subtitle">
-        Free-talk with your AI partner. It corrects your grammar and keeps the conversation
-        moving with active-recall questions.
+        Free-talk with your AI partner — by text, or fully hands-free in Voice Notes mode.
+        It corrects your grammar and keeps the conversation moving.
       </p>
 
       {!hasKey ? (
-        <div className="glass">
-          <div className="info-banner">
-            To activate the AI partner, add your Gemini API key first. The key is stored only
-            in this browser and sent only to Google's API.
-          </div>
-          <button type="button" className="btn btn-primary" onClick={() => onNavigate("settings")}>
-            ⚙️ Open Settings
-          </button>
-        </div>
+        <OfflineBridge onNavigate={onNavigate} />
       ) : (
         <div className="glass">
           {error && <div className="error-banner">{error}</div>}
+
+          {voiceMode && (
+            <div className="voice-loop-panel">
+              <VoiceWave phase={loopPhase} />
+              <span className="voice-loop-status">
+                {loopPhase === "listening"
+                  ? "Your turn — speak now"
+                  : loopPhase === "speaking"
+                    ? "Lingua is speaking…"
+                    : "Thinking…"}
+              </span>
+              <span className="voice-loop-transcript">{loopTranscript}</span>
+            </div>
+          )}
 
           <div className="chat-window" ref={chatWindowRef}>
             {messages.map((message) => (
@@ -211,16 +329,17 @@ export function Conversation({ onNavigate }: ConversationProps) {
                 // Enter sends; Shift+Enter makes a newline — chat convention.
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  void handleSend();
+                  handleSendClick();
                 }
               }}
-              disabled={sending}
+              disabled={sending || voiceMode}
             />
             {isRecognitionSupported() && (
               <button
                 type="button"
                 className={`btn ${dictating ? "btn-recording" : "btn-ghost"}`}
                 onClick={handleDictate}
+                disabled={voiceMode}
                 title={dictating ? "Stop dictation" : "Dictate with your voice"}
               >
                 🎙️
@@ -229,20 +348,31 @@ export function Conversation({ onNavigate }: ConversationProps) {
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => void handleSend()}
-              disabled={sending || !draft.trim()}
+              onClick={handleSendClick}
+              disabled={sending || voiceMode || !draft.trim()}
             >
               Send
             </button>
           </div>
 
           <div className="row" style={{ marginTop: 12 }}>
+            {isRecognitionSupported() && (
+              <button
+                type="button"
+                className={`btn ${voiceMode ? "btn-recording" : ""}`}
+                onClick={toggleVoiceMode}
+                title="Hands-free spoken conversation: Lingua speaks, then your mic opens automatically"
+              >
+                🎧 {voiceMode ? "Stop Voice Notes" : "Voice Notes mode"}
+              </button>
+            )}
             <label style={{ fontSize: "0.82rem", color: "var(--text-secondary)" }}>
               <input
                 type="checkbox"
                 checked={speakReplies}
                 onChange={(e) => setSpeakReplies(e.target.checked)}
-                style={{ marginRight: 6, accentColor: "var(--accent)" }}
+                disabled={voiceMode}
+                style={{ marginRight: 6 }}
               />
               Read replies aloud
             </label>
