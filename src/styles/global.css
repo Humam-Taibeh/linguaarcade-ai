@@ -35,6 +35,10 @@
     Roboto, "Helvetica Neue", Arial, sans-serif;
   /* Premium motion curve: fast start, long soft landing (easeOutQuint-like). */
   --ease-premium: cubic-bezier(0.22, 1, 0.36, 1);
+  /* True elastic overshoot ("back" easing): the curve itself dips past 1 and
+     settles back, so a single transition — no keyframes needed — produces a
+     genuine spring bounce on press/release and hover lift. */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --font-mono: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
 }
 
@@ -520,18 +524,20 @@ textarea.input,
   font-weight: 600;
   cursor: pointer;
   touch-action: manipulation;
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast),
+  transition: transform 320ms var(--ease-spring), box-shadow var(--transition-fast),
     background var(--transition-fast), opacity var(--transition-fast);
   user-select: none;
 }
 
 .btn:hover:not(:disabled) {
-  transform: translateY(-1px);
+  transform: translateY(-2px) scale(1.015);
 }
 
 .btn:active:not(:disabled) {
-  /* Tactile press: the button visibly "gives" under the finger. */
-  transform: translateY(0) scale(0.97);
+  /* Tactile press: the spring curve makes the release visibly bounce back
+     past neutral instead of just snapping — a real elastic feel. */
+  transform: translateY(0) scale(0.94);
+  transition-duration: 140ms;
 }
 
 .btn:disabled {
@@ -991,6 +997,19 @@ input[type="checkbox"] {
  * Chat (AI conversation + imported dialogue scenes)
  * ------------------------------------------------------------------------- */
 
+/* The chat card as a lit stage: two soft, blurred light-leaks living in the
+ * card's own background layer (not a separate element), so they sit behind
+ * every message with zero stacking-context risk. Declared here — after the
+ * .glass rule earlier in the file — so this background-image wins the
+ * cascade instead of being wiped by .glass's `background:` shorthand. */
+.chat-card {
+  position: relative;
+  overflow: hidden;
+  background-image:
+    radial-gradient(560px 360px at 88% -10%, var(--glow-accent), transparent 65%),
+    radial-gradient(460px 320px at -8% 108%, var(--accent-tint-bg), transparent 60%);
+}
+
 .chat-window {
   display: flex;
   flex-direction: column;
@@ -1002,6 +1021,23 @@ input[type="checkbox"] {
   overscroll-behavior: contain; /* don't chain-scroll the page behind it */
   padding: 4px 6px 4px 2px;
   margin-bottom: 16px;
+  /* Edge fade: the top/bottom few pixels dissolve to transparent, a subtle
+     but unmistakable "there's more, keep scrolling" cue used by every
+     premium chat surface (Gemini, iMessage). */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 20px,
+    black calc(100% - 20px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 20px,
+    black calc(100% - 20px),
+    transparent 100%
+  );
 }
 
 .msg {
@@ -1051,20 +1087,35 @@ input[type="checkbox"] {
   margin-bottom: 4px;
 }
 
-/* Correction flashcards: quiet, premium, inviting to read — neutral glass
- * with an accent spine instead of an alarming warning tint. Cards cascade in
- * with a slight stagger so multiple corrections feel dealt, not dumped. */
+/* Correction insights: deliberately DETACHED from the bubble surface rather
+ * than glued flush to it — a visible gap plus its own recessed glass card
+ * reads as "a separate, considered note", the pro-tool feel, not a warning
+ * sticker bolted onto the message. Cards cascade in with a slight stagger so
+ * multiple corrections feel dealt, not dumped. */
 .correction-card {
-  margin-top: 10px;
+  margin-top: 12px;
   padding: 12px 14px;
-  border-radius: var(--radius-md);
-  background: var(--surface-glass-strong);
+  border-radius: 14px;
+  background: var(--surface-glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid var(--border-glass);
-  border-inline-start: 3px solid var(--accent);
-  box-shadow: 0 4px 16px var(--shadow-card);
+  box-shadow: 0 6px 20px var(--shadow-card), inset 0 1px 0 var(--glass-inner-glow);
   font-size: 0.84rem;
   line-height: 1.5;
   animation: fade-in-up 360ms var(--ease-premium) both;
+}
+
+.correction-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 7px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-bright);
 }
 
 .correction-card + .correction-card {

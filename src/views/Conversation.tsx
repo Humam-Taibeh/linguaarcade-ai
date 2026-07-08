@@ -343,6 +343,9 @@ export function Conversation({ onNavigate }: ConversationProps) {
 
                 {message.corrections?.map((correction, index) => (
                   <div key={index} className="correction-card">
+                    <span className="correction-label" aria-hidden="true">
+                      ✦ Quick fix
+                    </span>
                     <span className="from">{correction.original}</span>
                     {" → "}
                     <span className="to">{correction.corrected}</span>
