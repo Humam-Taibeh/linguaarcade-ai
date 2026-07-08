@@ -67,6 +67,7 @@ export function SettingsView() {
     void speak("This is how your practice sentences will sound.", {
       voiceURI: settings.voiceURI || undefined,
       rate: settings.speechRate,
+      pitch: settings.speechPitch,
     });
   };
 
@@ -240,6 +241,31 @@ export function SettingsView() {
             />
             <span className="hint">
               0.8–0.9× is the sweet spot for shadowing; raise it as you improve.
+            </span>
+          </div>
+
+          <div className="field">
+            <label htmlFor="pitch-slider">
+              Voice pitch: {settings.speechPitch.toFixed(2)}×
+            </label>
+            <input
+              id="pitch-slider"
+              className="slider"
+              type="range"
+              min={0.8}
+              max={1.2}
+              step={0.05}
+              value={settings.speechPitch}
+              onChange={(e) =>
+                dispatch({
+                  type: "UPDATE_SETTINGS",
+                  settings: { speechPitch: Number(e.target.value) },
+                })
+              }
+            />
+            <span className="hint">
+              1.00× is the voice's natural tone; a touch above reads warmer, below
+              reads calmer. Use ▶ Preview to hear it live.
             </span>
           </div>
 

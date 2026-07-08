@@ -172,11 +172,22 @@
   box-sizing: border-box;
 }
 
+/* App frame: the PAGE never scrolls — only designated inner panes do
+ * (main content, chat window). Combined with overscroll-behavior: none this
+ * kills elastic bounce and pull-to-refresh, which is 90% of what makes a
+ * site "feel web" instead of "feel app". (Deliberately NOT touch-action:
+ * none — that would also kill touch scrolling inside the chat.) */
 html,
 body {
   margin: 0;
   padding: 0;
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+#root {
+  height: 100%;
 }
 
 html {
@@ -221,18 +232,55 @@ textarea.input,
 
 .app-shell {
   display: flex;
-  min-height: 100vh;
-  min-height: 100dvh; /* dynamic viewport: correct under mobile URL bars */
+  height: 100vh;
+  height: 100dvh; /* dynamic viewport: correct under mobile URL bars */
+  overflow: hidden;
 }
 
+/* The ONE designated scroll pane for regular views (Dashboard, Settings…).
+ * The Conversation view opts out via .view-fill and scrolls only its chat. */
 .main-content {
   flex: 1;
   min-width: 0; /* allow flex children to shrink instead of overflowing */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 32px clamp(16px, 4vw, 48px) 64px;
   /* Respect notches / home-indicator on standalone mobile deployments. */
   padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Center content on wide screens without fighting the scroll container. */
+.main-content > * {
   max-width: 1160px;
-  margin: 0 auto;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Full-height views (Conversation): header + card fill the pane exactly,
+ * so the pane itself never scrolls — the chat window inside does. */
+.view-fill {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.view-fill .view-subtitle {
+  margin-bottom: 20px;
+}
+
+.chat-card {
+  flex: 1;
+  min-height: 0; /* CRITICAL: lets the flex child actually shrink+scroll */
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.chat-card .chat-window {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
 }
 
 .view-header {
@@ -959,11 +1007,24 @@ input[type="checkbox"] {
 .msg {
   max-width: 82%;
   padding: 12px 16px;
-  border-radius: var(--radius-lg);
+  border-radius: 20px;
   font-size: 0.93rem;
-  /* Compositor-only entrance (opacity + transform): stays 60fps even while
-     the voice loop is mid-flight. */
-  animation: fade-in-up 340ms var(--ease-premium) both;
+  line-height: 1.5;
+  /* Spring entrance: fast rise with a whisper of overshoot — the modern
+     messenger feel. Compositor-only (opacity + transform): stays 60fps even
+     while the voice loop is mid-flight. */
+  animation: msg-pop 420ms cubic-bezier(0.34, 1.4, 0.44, 1) both;
+}
+
+@keyframes msg-pop {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .msg.user {
@@ -1051,14 +1112,20 @@ input[type="checkbox"] {
   flex: 1;
 }
 
+/* "Thinking" renders as a real chat bubble with live dots (Gemini-style),
+ * so a slow reply reads as "she's typing", never "the app froze". */
 .typing-indicator {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   align-self: flex-start;
+  background: var(--surface-glass-strong);
+  border: 1px solid var(--border-glass);
+  border-radius: 20px;
+  border-bottom-left-radius: 6px;
   color: var(--text-faint);
   font-size: 0.86rem;
-  padding: 6px 4px;
-  animation: fade-in-up 200ms ease both;
+  padding: 12px 16px;
+  animation: msg-pop 320ms cubic-bezier(0.34, 1.4, 0.44, 1) both;
 }
 
 .typing-dots {

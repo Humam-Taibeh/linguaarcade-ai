@@ -10,6 +10,16 @@
     <!-- viewport-fit=cover lets the app paint edge-to-edge behind notches;
          safe-area insets in the CSS keep content out of hardware cutouts. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- App-like install: "Add to Home Screen" on iPhone launches full-screen
+         with no Safari chrome — the closest a web app gets to the App Store
+         feel, for free. theme-color tints the browser/status bar to match. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="LinguaArcade" />
+    <meta name="theme-color" content="#0b0c10" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f7f7f4" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b0c10" />
     <meta
       name="description"
       content="LinguaArcade AI — an immersive English learning platform with AI pronunciation analysis, shadowing practice, and conversational AI."

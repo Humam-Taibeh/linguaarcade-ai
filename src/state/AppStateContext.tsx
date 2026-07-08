@@ -56,6 +56,7 @@ const DEFAULT_SETTINGS: Settings = {
   ollamaModel: "llama3",
   voiceURI: "",
   speechRate: 0.9,
+  speechPitch: 1,
   strictness: "standard",
   soundEffects: true,
   theme: "dark",

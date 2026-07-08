@@ -228,6 +228,7 @@ export function Conversation({ onNavigate }: ConversationProps) {
         await speak(spokenText, {
           voiceURI: settings.voiceURI || undefined,
           rate: settings.speechRate,
+          pitch: settings.speechPitch,
         });
         setLoopPhase("idle");
         if (voiceModeRef.current) startVoiceCapture();
@@ -235,6 +236,7 @@ export function Conversation({ onNavigate }: ConversationProps) {
         void speak(spokenText, {
           voiceURI: settings.voiceURI || undefined,
           rate: settings.speechRate,
+          pitch: settings.speechPitch,
         });
       }
     },
@@ -303,7 +305,9 @@ export function Conversation({ onNavigate }: ConversationProps) {
       : settings.ollamaBaseUrl.trim().length > 0;
 
   return (
-    <div className="fade-in">
+    // view-fill: this view owns the full pane height — the page never
+    // scrolls here, only the chat window inside the card does (app-like).
+    <div className={engineReady ? "fade-in view-fill" : "fade-in"}>
       <h1 className="view-header">AI Conversation</h1>
       <p className="view-subtitle">
         Free-talk with your AI partner — by text, or fully hands-free in Voice Notes mode.
@@ -313,7 +317,7 @@ export function Conversation({ onNavigate }: ConversationProps) {
       {!engineReady ? (
         <OfflineBridge onNavigate={onNavigate} />
       ) : (
-        <div className="glass">
+        <div className="glass chat-card">
           {error && <div className="error-banner">{error}</div>}
 
           {voiceMode && (

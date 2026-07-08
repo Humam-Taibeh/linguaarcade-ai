@@ -89,6 +89,8 @@ export interface Settings {
   voiceURI: string;
   /** TTS speaking rate. 0.8 is a good shadowing default (slightly slow). */
   speechRate: number;
+  /** TTS pitch. 1 = the voice's neutral tone; small lifts read warmer. */
+  speechPitch: number;
   strictness: Strictness;
   soundEffects: boolean;
   theme: ThemeMode;

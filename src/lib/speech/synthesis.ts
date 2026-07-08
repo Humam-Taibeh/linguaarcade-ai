@@ -46,6 +46,7 @@ export function getEnglishVoices(): Promise<SpeechSynthesisVoice[]> {
  * variants are actively penalized — they are the "robotic" sound users hate.
  */
 const KNOWN_GOOD_NAMES = [
+  // Microsoft Edge "Natural" voices
   "aria",
   "jenny",
   "guy",
@@ -53,26 +54,36 @@ const KNOWN_GOOD_NAMES = [
   "sonia",
   "libby",
   "michelle",
+  // Apple's best English voices (iPhone/Mac; Enhanced/Premium variants
+  // appear here once downloaded in iOS Settings → Accessibility)
   "samantha",
+  "ava",
+  "zoe",
+  "evan",
+  "allison",
+  "joelle",
   "karen",
   "daniel",
   "zira",
 ];
 
 function scoreVoice(voice: SpeechSynthesisVoice): number {
-  const name = voice.name.toLowerCase();
+  // iOS often puts the quality marker in the voiceURI, not the display name
+  // (e.g. "com.apple.voice.enhanced.en-US.Ava") — score both.
+  const id = `${voice.name} ${voice.voiceURI}`.toLowerCase();
   const lang = voice.lang.toLowerCase();
   let score = 0;
-  if (name.includes("natural")) score += 10;
-  if (name.includes("neural")) score += 9;
-  if (name.includes("premium") || name.includes("enhanced")) score += 7;
-  if (name.includes("google")) score += 6;
-  if (name.includes("online")) score += 3;
+  if (id.includes("natural")) score += 10;
+  if (id.includes("neural")) score += 9;
+  if (id.includes("siri")) score += 9;
+  if (id.includes("premium") || id.includes("enhanced")) score += 7;
+  if (id.includes("google")) score += 6;
+  if (id.includes("online")) score += 3;
   if (!voice.localService) score += 3;
-  if (KNOWN_GOOD_NAMES.some((n) => name.includes(n))) score += 2;
+  if (KNOWN_GOOD_NAMES.some((n) => id.includes(n))) score += 2;
   if (lang.startsWith("en-us")) score += 2;
   else if (lang.startsWith("en-gb")) score += 1;
-  if (name.includes("espeak")) score -= 8;
+  if (id.includes("espeak") || id.includes("compact")) score -= 8;
   return score;
 }
 
