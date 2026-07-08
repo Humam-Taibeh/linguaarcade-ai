@@ -22,6 +22,13 @@ export type Strictness = "standard" | "strict";
 /** UI color theme. Persisted so the choice survives reloads on every device. */
 export type ThemeMode = "dark" | "light";
 
+/**
+ * Which AI backend powers the Conversation tutor.
+ * - "gemini": Google Gemini cloud API, authenticated with the user's own key.
+ * - "ollama": a local Ollama instance exposed through an ngrok tunnel.
+ */
+export type AiEngine = "gemini" | "ollama";
+
 /** A user-authored practice sentence from the "My Sentences" module. */
 export interface Sentence {
   id: string;
@@ -71,7 +78,13 @@ export interface Profile {
 
 /** User preferences. The Gemini key lives here and is persisted to LocalStorage only. */
 export interface Settings {
+  /** Active tutor backend; switchable at any time from the Settings view. */
+  aiEngine: AiEngine;
   geminiApiKey: string;
+  /** ngrok tunnel origin for the local Ollama server, without a trailing path. */
+  ollamaBaseUrl: string;
+  /** Model tag served by the local Ollama instance (e.g. "llama3"). */
+  ollamaModel: string;
   /** Preferred TTS voice; empty string means "browser default English voice". */
   voiceURI: string;
   /** TTS speaking rate. 0.8 is a good shadowing default (slightly slow). */

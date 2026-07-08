@@ -1,6 +1,7 @@
 /**
- * AI Conversation — a live English partner powered by the user's own Gemini
- * API key, now with a hands-free Voice Notes loop.
+ * AI Conversation — a live English partner with a hands-free Voice Notes loop,
+ * powered by whichever engine is active in Settings (Gemini cloud or local
+ * Ollama over ngrok).
  *
  * Voice loop architecture: send → reply → TTS finishes → microphone opens
  * automatically → final transcript auto-sends → repeat. The chain is driven
@@ -9,13 +10,13 @@
  * the voice-mode flag because the async continuations must consult the
  * *current* value, not the one captured when the chain started.
  *
- * Without an API key, the view degrades gracefully into the Offline Bridge
+ * When the active engine is unconfigured, the view degrades into the Offline Bridge
  * (prompt generator + response ingestion) instead of a dead end.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   sendTutorMessage,
-  GeminiError,
+  TutorApiError,
   type ChatMessage,
   type Correction,
   type TutorReply,
@@ -156,9 +157,18 @@ export function Conversation({ onNavigate }: ConversationProps) {
 
       let reply: TutorReply | null = null;
       try {
-        reply = await sendTutorMessage(settings.geminiApiKey, history, content);
+        reply = await sendTutorMessage(
+          {
+            engine: settings.aiEngine,
+            geminiApiKey: settings.geminiApiKey,
+            ollamaBaseUrl: settings.ollamaBaseUrl,
+            ollamaModel: settings.ollamaModel,
+          },
+          history,
+          content
+        );
       } catch (err) {
-        setError(err instanceof GeminiError ? err.message : "Unexpected error — try again.");
+        setError(err instanceof TutorApiError ? err.message : "Unexpected error — try again.");
         if (voiceModeRef.current) stopVoiceMode();
       } finally {
         setSending(false);
@@ -264,7 +274,12 @@ export function Conversation({ onNavigate }: ConversationProps) {
     void sendMessage(text);
   };
 
-  const hasKey = settings.geminiApiKey.trim().length > 0;
+  // The chat is usable when the *active* engine is configured: Gemini needs a
+  // key, Ollama needs a tunnel URL. Otherwise the Offline Bridge takes over.
+  const engineReady =
+    settings.aiEngine === "gemini"
+      ? settings.geminiApiKey.trim().length > 0
+      : settings.ollamaBaseUrl.trim().length > 0;
 
   return (
     <div className="fade-in">
@@ -274,7 +289,7 @@ export function Conversation({ onNavigate }: ConversationProps) {
         It corrects your grammar and keeps the conversation moving.
       </p>
 
-      {!hasKey ? (
+      {!engineReady ? (
         <OfflineBridge onNavigate={onNavigate} />
       ) : (
         <div className="glass">

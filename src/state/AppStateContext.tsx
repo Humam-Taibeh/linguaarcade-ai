@@ -48,7 +48,12 @@ const DEFAULT_PROFILE: Profile = {
 };
 
 const DEFAULT_SETTINGS: Settings = {
+  // "ollama" preserves the behavior of existing installs, which currently
+  // route every conversation through the local tunnel.
+  aiEngine: "ollama",
   geminiApiKey: "",
+  ollamaBaseUrl: "https://handwrite-oboe-cozy.ngrok-free.dev",
+  ollamaModel: "llama3",
   voiceURI: "",
   speechRate: 0.9,
   strictness: "standard",

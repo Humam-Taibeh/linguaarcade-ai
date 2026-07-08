@@ -1,6 +1,7 @@
 /**
- * Settings — Gemini API key management, voice tuning, scorer strictness, and
- * the (guarded) progress reset.
+ * Settings — AI engine selection (Gemini cloud vs. local Ollama), API key and
+ * tunnel management, voice tuning, scorer strictness, and the (guarded)
+ * progress reset.
  *
  * Security posture for the API key: it lives exclusively in this browser's
  * LocalStorage, is rendered as a password field, and is transmitted only to
@@ -10,7 +11,7 @@
 import { useEffect, useState } from "react";
 import { useAppState } from "../state/AppStateContext";
 import { getEnglishVoices, speak } from "../lib/speech/synthesis";
-import type { Strictness } from "../types";
+import type { AiEngine, Strictness } from "../types";
 
 export function SettingsView() {
   const { state, dispatch } = useAppState();
@@ -19,6 +20,9 @@ export function SettingsView() {
   const [keyDraft, setKeyDraft] = useState(settings.geminiApiKey);
   const [showKey, setShowKey] = useState(false);
   const [keySaved, setKeySaved] = useState(false);
+  const [ollamaUrlDraft, setOllamaUrlDraft] = useState(settings.ollamaBaseUrl);
+  const [ollamaModelDraft, setOllamaModelDraft] = useState(settings.ollamaModel);
+  const [ollamaSaved, setOllamaSaved] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   useEffect(() => {
@@ -35,6 +39,23 @@ export function SettingsView() {
     dispatch({ type: "UPDATE_SETTINGS", settings: { geminiApiKey: keyDraft.trim() } });
     setKeySaved(true);
     window.setTimeout(() => setKeySaved(false), 2500);
+  };
+
+  const handleSaveOllama = () => {
+    dispatch({
+      type: "UPDATE_SETTINGS",
+      settings: {
+        // Store the bare origin; the client appends /v1/chat/completions itself.
+        ollamaBaseUrl: ollamaUrlDraft.trim().replace(/\/+$/, ""),
+        ollamaModel: ollamaModelDraft.trim() || "llama3",
+      },
+    });
+    setOllamaSaved(true);
+    window.setTimeout(() => setOllamaSaved(false), 2500);
+  };
+
+  const handleEngineChange = (engine: AiEngine) => {
+    dispatch({ type: "UPDATE_SETTINGS", settings: { aiEngine: engine } });
   };
 
   const handlePreviewVoice = () => {
@@ -60,6 +81,35 @@ export function SettingsView() {
       <p className="view-subtitle">Tune your AI partner, voice, and scoring strictness.</p>
 
       <div className="stack">
+        <div className="glass">
+          <h2 className="card-title">🧠 AI engine</h2>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <div className="row" role="radiogroup" aria-label="AI engine">
+              <button
+                type="button"
+                className={`btn ${settings.aiEngine === "gemini" ? "btn-primary" : "btn-ghost"}`}
+                aria-pressed={settings.aiEngine === "gemini"}
+                onClick={() => handleEngineChange("gemini")}
+              >
+                ☁️ Gemini Cloud
+              </button>
+              <button
+                type="button"
+                className={`btn ${settings.aiEngine === "ollama" ? "btn-primary" : "btn-ghost"}`}
+                aria-pressed={settings.aiEngine === "ollama"}
+                onClick={() => handleEngineChange("ollama")}
+              >
+                🖥️ Local Ollama
+              </button>
+            </div>
+            <span className="hint">
+              {settings.aiEngine === "gemini"
+                ? "Conversations go to Google's Gemini API using your key below. Works anywhere, no PC required."
+                : "Conversations go to Ollama on your PC through the ngrok tunnel below. Your PC, Ollama, and ngrok must be running."}
+            </span>
+          </div>
+        </div>
+
         <div className="glass">
           <h2 className="card-title">🤖 Gemini API key</h2>
           <div className="field">
@@ -90,6 +140,48 @@ export function SettingsView() {
             <span className="hint">
               Get a free key at aistudio.google.com. Stored only in this browser's
               LocalStorage; sent only to Google's API. Never commit it anywhere.
+            </span>
+          </div>
+        </div>
+
+        <div className="glass">
+          <h2 className="card-title">🖥️ Local Ollama tunnel</h2>
+          <div className="field">
+            <label htmlFor="ollama-url">ngrok tunnel URL</label>
+            <input
+              id="ollama-url"
+              className="input"
+              type="url"
+              placeholder="https://your-domain.ngrok-free.dev"
+              value={ollamaUrlDraft}
+              onChange={(e) => setOllamaUrlDraft(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <span className="hint">
+              The static domain from your ngrok dashboard — origin only, no /v1 path.
+            </span>
+          </div>
+          <div className="field">
+            <label htmlFor="ollama-model">Model</label>
+            <div className="row">
+              <input
+                id="ollama-model"
+                className="input"
+                style={{ flex: 1, minWidth: 160 }}
+                type="text"
+                placeholder="llama3"
+                value={ollamaModelDraft}
+                onChange={(e) => setOllamaModelDraft(e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <button type="button" className="btn btn-primary" onClick={handleSaveOllama}>
+                {ollamaSaved ? "Saved ✓" : "Save tunnel"}
+              </button>
+            </div>
+            <span className="hint">
+              Must match a model pulled on your PC (run "ollama list" to check).
             </span>
           </div>
         </div>
