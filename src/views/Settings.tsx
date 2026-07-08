@@ -11,6 +11,7 @@
 import { useEffect, useState } from "react";
 import { useAppState } from "../state/AppStateContext";
 import { getEnglishVoices, speak } from "../lib/speech/synthesis";
+import { sanitizeOllamaBaseUrl } from "../lib/gemini/client";
 import type { AiEngine, Strictness } from "../types";
 
 export function SettingsView() {
@@ -42,11 +43,15 @@ export function SettingsView() {
   };
 
   const handleSaveOllama = () => {
+    // Same sanitizer the client uses at send time: strips invisible
+    // characters, forces https, and reduces the value to a bare origin.
+    // Reflecting it back into the draft shows the user exactly what saved.
+    const cleanedUrl = sanitizeOllamaBaseUrl(ollamaUrlDraft);
+    setOllamaUrlDraft(cleanedUrl);
     dispatch({
       type: "UPDATE_SETTINGS",
       settings: {
-        // Store the bare origin; the client appends /v1/chat/completions itself.
-        ollamaBaseUrl: ollamaUrlDraft.trim().replace(/\/+$/, ""),
+        ollamaBaseUrl: cleanedUrl,
         ollamaModel: ollamaModelDraft.trim() || "llama3",
       },
     });

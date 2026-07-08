@@ -129,6 +129,25 @@ interface OpenAiChatResponse {
   }>;
 }
 
+/**
+ * Normalize a user-entered tunnel URL into a clean https origin.
+ * Handles the classic mobile-input hazards: ordinary and zero-width
+ * whitespace pasted from chat apps, a missing scheme, an http:// scheme
+ * (which the browser silently blocks as mixed content on the https app),
+ * and accidentally pasted paths like /v1/chat/completions.
+ */
+export function sanitizeOllamaBaseUrl(raw: string): string {
+  const compact = raw.replace(/[\s\p{Cf}]/gu, "");
+  if (!compact) return "";
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(compact) ? compact : `https://${compact}`;
+  const upgraded = withScheme.replace(/^http:\/\//i, "https://");
+  try {
+    return new URL(upgraded).origin;
+  } catch {
+    return "";
+  }
+}
+
 /** App history → OpenAI/Ollama messages array, system prompt first. */
 function toOpenAiMessages(history: ChatMessage[], userMessage: string): OpenAiChatMessage[] {
   return [
@@ -146,9 +165,9 @@ async function sendViaOllama(
   history: ChatMessage[],
   userMessage: string
 ): Promise<string> {
-  const baseUrl = config.ollamaBaseUrl.trim().replace(/\/+$/, "");
+  const baseUrl = sanitizeOllamaBaseUrl(config.ollamaBaseUrl);
   if (!baseUrl) {
-    throw new TutorApiError("No Ollama tunnel URL is configured. Add it in Settings.");
+    throw new TutorApiError("The Ollama tunnel URL is missing or invalid. Fix it in Settings.");
   }
 
   const body = {
@@ -163,18 +182,21 @@ async function sendViaOllama(
   try {
     response = await fetch(`${baseUrl}/v1/chat/completions`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        // Without this header, ngrok's free tier serves an HTML interstitial
-        // instead of proxying the request — which breaks JSON parsing and
-        // kills the Voice Notes loop on mobile browsers.
-        "ngrok-skip-browser-warning": "true",
-      },
+      // Deliberately ONLY Content-Type. Ollama's CORS layer allows a fixed
+      // list of request headers, so any custom header (including
+      // "ngrok-skip-browser-warning") makes the browser's CORS preflight fail
+      // before the request ever leaves the phone — which surfaced as an
+      // instant "Tunnel connection failed". The ngrok interstitial is skipped
+      // at the tunnel itself instead: run ngrok with
+      //   --request-header-add "ngrok-skip-browser-warning: true"
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
   } catch {
     throw new TutorApiError(
-      "Tunnel connection failed — make sure Ollama and ngrok are running on your PC."
+      "The browser blocked the request before it reached the tunnel (CORS preflight or mixed content). " +
+        "On the PC: quit Ollama from the tray and reopen it so OLLAMA_ORIGINS takes effect, " +
+        "and start ngrok with --host-header=localhost:11434."
     );
   }
 
@@ -185,7 +207,22 @@ async function sendViaOllama(
     );
   }
 
-  const data = (await response.json()) as OpenAiChatResponse;
+  const rawBody = await response.text();
+  // ngrok's free tier can answer with its HTML warning page instead of
+  // proxying the request. Detect it explicitly so the user gets the real
+  // cause instead of a JSON parse error.
+  if (rawBody.trimStart().startsWith("<")) {
+    throw new TutorApiError(
+      'ngrok returned its browser-warning page instead of JSON. Restart the tunnel with: ngrok http 11434 --request-header-add "ngrok-skip-browser-warning: true" ...'
+    );
+  }
+
+  let data: OpenAiChatResponse;
+  try {
+    data = JSON.parse(rawBody) as OpenAiChatResponse;
+  } catch {
+    throw new TutorApiError("The tunnel returned a non-JSON response. Check the ngrok window on your PC.");
+  }
   return data.choices?.[0]?.message?.content ?? "";
 }
 
