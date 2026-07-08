@@ -206,7 +206,7 @@ export function SettingsView() {
                   dispatch({ type: "UPDATE_SETTINGS", settings: { voiceURI: e.target.value } })
                 }
               >
-                <option value="">Browser default (English)</option>
+                <option value="">✨ Auto — best voice on this device</option>
                 {voices.map((voice) => (
                   <option key={voice.voiceURI} value={voice.voiceURI}>
                     {voice.name} ({voice.lang})

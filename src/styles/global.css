@@ -8,8 +8,8 @@
  * restyling and zero component changes.
  *
  * Contrast policy (WCAG AA): body text tokens are chosen for ≥ 4.5:1 against
- * their surfaces (dark: #eef1fb on #070a14 ≈ 15:1, secondary #9aa3c0 ≈ 7:1;
- * light: #182033 on #f4f6fb ≈ 13:1, secondary #46516b ≈ 7:1). Semantic
+ * their surfaces (dark: #f0f1f5 on #0b0c10 charcoal ≈ 15:1, secondary ≈ 7:1;
+ * light: #1d1f27 on #f7f7f4 off-white ≈ 13:1, secondary ≈ 7:1). Semantic
  * colors (success/warning/danger) use darker ink values in light mode
  * because the neon values that glow on dark fail AA on white.
  *
@@ -47,29 +47,34 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --bg-base: #070a14;
-  --bg-glow-1: rgba(124, 108, 255, 0.13); /* indigo aurora */
-  --bg-glow-2: rgba(56, 224, 212, 0.09);  /* teal aurora */
+  /* Deep charcoal — neutral, soft, expensive-looking. The old blue-black
+   * base read as "gamer RGB"; charcoal reads as a studio. Auroras stay, but
+   * quieter: depth without shouting. */
+  --bg-base: #0b0c10;
+  --bg-glow-1: rgba(124, 108, 255, 0.1);  /* indigo aurora, hushed */
+  --bg-glow-2: rgba(56, 224, 212, 0.06);  /* teal aurora, hushed */
 
-  --surface-glass: rgba(255, 255, 255, 0.045);
-  --surface-glass-strong: rgba(255, 255, 255, 0.08);
-  --surface-sidebar: rgba(10, 13, 26, 0.72);
-  --surface-input: rgba(0, 0, 0, 0.28);
-  --menu-bg: #10142a;
+  --surface-glass: rgba(255, 255, 255, 0.05);
+  --surface-glass-strong: rgba(255, 255, 255, 0.085);
+  --surface-sidebar: rgba(14, 15, 20, 0.72);
+  --surface-input: rgba(0, 0, 0, 0.3);
+  --menu-bg: #15161c;
 
-  --border-glass: rgba(255, 255, 255, 0.09);
-  --border-glass-bright: rgba(255, 255, 255, 0.18);
+  --border-glass: rgba(255, 255, 255, 0.08);
+  --border-glass-bright: rgba(255, 255, 255, 0.16);
 
-  --text-primary: #eef1fb;
-  --text-secondary: #9aa3c0;
-  --text-faint: #5d6584;
+  --text-primary: #f0f1f5;
+  --text-secondary: #a2a7b8;
+  --text-faint: #646a7c;
+  /* Hairline light catching the top edge of glass panels — the "float". */
+  --glass-inner-glow: rgba(255, 255, 255, 0.06);
 
   --accent: #7c6cff;
   --accent-bright: #998cff;
   --accent-2: #38e0d4;
   --gradient-accent: linear-gradient(135deg, #7c6cff 0%, #38e0d4 100%);
   /* Ink used ON TOP of the accent gradient: dark ink on bright neon. */
-  --on-accent: #0a0d1a;
+  --on-accent: #0b0c10;
   --accent-tint-bg: rgba(124, 108, 255, 0.18);
   --accent-tint-border: rgba(124, 108, 255, 0.35);
   --glow-accent: rgba(124, 108, 255, 0.45);
@@ -91,7 +96,7 @@
   --info-border: rgba(56, 224, 212, 0.3);
 
   --ring-track: rgba(255, 255, 255, 0.08);
-  --shadow-card: rgba(0, 0, 0, 0.35);
+  --shadow-card: rgba(0, 0, 0, 0.45);
   --scrollbar-thumb: rgba(255, 255, 255, 0.12);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
 }
@@ -105,22 +110,25 @@
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --bg-base: #f2f4fa;
-  --bg-glow-1: rgba(91, 73, 240, 0.09);  /* soft lavender lighting */
-  --bg-glow-2: rgba(11, 143, 133, 0.07); /* soft teal lighting */
+  /* Soft off-white — warm paper, not clinical blue-white. Grays are neutral
+   * slate, borders whisper. The page should feel like expensive stationery. */
+  --bg-base: #f7f7f4;
+  --bg-glow-1: rgba(91, 73, 240, 0.06);  /* soft lavender lighting */
+  --bg-glow-2: rgba(11, 143, 133, 0.05); /* soft teal lighting */
 
-  --surface-glass: rgba(255, 255, 255, 0.62);
-  --surface-glass-strong: rgba(255, 255, 255, 0.85);
-  --surface-sidebar: rgba(255, 255, 255, 0.72);
-  --surface-input: rgba(255, 255, 255, 0.8);
+  --surface-glass: rgba(255, 255, 255, 0.65);
+  --surface-glass-strong: rgba(255, 255, 255, 0.88);
+  --surface-sidebar: rgba(255, 255, 255, 0.75);
+  --surface-input: rgba(255, 255, 255, 0.85);
   --menu-bg: #ffffff;
 
-  --border-glass: rgba(23, 32, 60, 0.1);
-  --border-glass-bright: rgba(23, 32, 60, 0.2);
+  --border-glass: rgba(30, 32, 40, 0.09);
+  --border-glass-bright: rgba(30, 32, 40, 0.18);
 
-  --text-primary: #182033;
-  --text-secondary: #46516b;
-  --text-faint: #7c86a3;
+  --text-primary: #1d1f27;
+  --text-secondary: #4d5261;
+  --text-faint: #7e8393;
+  --glass-inner-glow: rgba(255, 255, 255, 0.85);
 
   --accent: #5847e8;
   --accent-bright: #4636cf;
@@ -148,10 +156,10 @@
   --info-bg: rgba(11, 143, 133, 0.08);
   --info-border: rgba(11, 143, 133, 0.3);
 
-  --ring-track: rgba(23, 32, 60, 0.1);
-  --shadow-card: rgba(23, 32, 60, 0.12);
-  --scrollbar-thumb: rgba(23, 32, 60, 0.2);
-  --scrollbar-thumb-hover: rgba(23, 32, 60, 0.34);
+  --ring-track: rgba(30, 32, 40, 0.09);
+  --shadow-card: rgba(30, 32, 40, 0.1);
+  --scrollbar-thumb: rgba(30, 32, 40, 0.2);
+  --scrollbar-thumb-hover: rgba(30, 32, 40, 0.34);
 }
 
 /* ---------------------------------------------------------------------------
@@ -228,16 +236,18 @@ textarea.input,
 }
 
 .view-header {
-  margin: 0 0 6px;
-  font-size: 1.9rem;
+  margin: 0 0 8px;
+  font-size: 2.05rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
 }
 
 .view-subtitle {
-  margin: 0 0 28px;
+  margin: 0 0 32px;
   color: var(--text-secondary);
   font-size: 0.98rem;
+  max-width: 60ch; /* measured line length reads calmer than full-bleed */
 }
 
 /* ---------------------------------------------------------------------------
@@ -419,7 +429,12 @@ textarea.input,
   border-radius: var(--radius-lg);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-  padding: 22px;
+  padding: clamp(20px, 2.6vw, 28px);
+  /* The float: a soft drop shadow lifting the panel off the page, plus a
+   * hairline of light on the top edge — frosted glass catching the light. */
+  box-shadow:
+    0 12px 32px -16px var(--shadow-card),
+    inset 0 1px 0 var(--glass-inner-glow);
 }
 
 .glass.hoverable:hover {
@@ -718,6 +733,13 @@ input[type="checkbox"] {
 .voice-wave.listening .voice-bar {
   background: var(--accent-2);
   animation: wave-pulse 700ms ease-in-out infinite;
+}
+
+/* The user is audibly speaking (live interim transcript): the bars surge —
+ * faster and brighter — so the app visibly reacts to the voice in real time. */
+.voice-wave.listening.active .voice-bar {
+  animation-duration: 340ms;
+  filter: brightness(1.2);
 }
 
 @keyframes wave-pulse {
@@ -1202,14 +1224,28 @@ input[type="checkbox"] {
   font-size: 0.92rem;
 }
 
+/* Errors arrive gently: an icon, soft glass, a slide-in — informative, never
+ * an alarming wall of red. */
 .error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   padding: 12px 16px;
   border-radius: var(--radius-md);
   background: var(--danger-bg);
   border: 1px solid var(--danger-border);
   color: var(--danger);
   font-size: 0.88rem;
+  line-height: 1.5;
   margin-bottom: 16px;
+  animation: fade-in-up 300ms var(--ease-premium) both;
+}
+
+.error-banner::before {
+  content: "⚠️";
+  flex-shrink: 0;
+  font-size: 1rem;
+  line-height: 1.4;
 }
 
 .info-banner {

@@ -14,14 +14,21 @@ export type WavePhase = "idle" | "speaking" | "listening";
 
 interface VoiceWaveProps {
   phase: WavePhase;
+  /**
+   * True while the recognizer is actively producing interim transcript —
+   * i.e. the user is audibly speaking right now. The bars surge in response,
+   * which is what makes the loop feel like it hears you. Interim events are
+   * a free voice-activity signal; no second getUserMedia capture needed.
+   */
+  active?: boolean;
 }
 
 const BAR_COUNT = 7;
 
-export function VoiceWave({ phase }: VoiceWaveProps) {
+export function VoiceWave({ phase, active = false }: VoiceWaveProps) {
   return (
     <div
-      className={`voice-wave ${phase}`}
+      className={`voice-wave ${phase}${active ? " active" : ""}`}
       role="status"
       aria-label={
         phase === "listening"

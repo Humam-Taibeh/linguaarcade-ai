@@ -65,6 +65,11 @@ export function Conversation({ onNavigate }: ConversationProps) {
   const [voiceMode, setVoiceMode] = useState(false);
   const [loopPhase, setLoopPhase] = useState<WavePhase>("idle");
   const [loopTranscript, setLoopTranscript] = useState("");
+  // "The user is audibly speaking right now": flips on with every interim
+  // recognition event and decays shortly after they pause. Drives the
+  // voice-reactive surge of the waveform.
+  const [speechActive, setSpeechActive] = useState(false);
+  const speechActivityTimer = useRef<number | null>(null);
   // Ref mirror: async continuations (post-TTS, post-recognition) must read
   // the live value, not a stale closure snapshot.
   const voiceModeRef = useRef(false);
@@ -92,7 +97,19 @@ export function Conversation({ onNavigate }: ConversationProps) {
       voiceModeRef.current = false;
       recognizer?.abort();
       stopSpeaking();
+      if (speechActivityTimer.current !== null) {
+        window.clearTimeout(speechActivityTimer.current);
+      }
     };
+  }, []);
+
+  /** Pulse the "user is speaking" flag; it decays 650ms after the last word. */
+  const markSpeechActivity = useCallback(() => {
+    setSpeechActive(true);
+    if (speechActivityTimer.current !== null) {
+      window.clearTimeout(speechActivityTimer.current);
+    }
+    speechActivityTimer.current = window.setTimeout(() => setSpeechActive(false), 650);
   }, []);
 
   const stopVoiceMode = useCallback((reason?: string) => {
@@ -114,10 +131,14 @@ export function Conversation({ onNavigate }: ConversationProps) {
     setLoopPhase("listening");
 
     recognizer.start({
-      onInterim: setLoopTranscript,
+      onInterim: (transcript) => {
+        setLoopTranscript(transcript);
+        markSpeechActivity();
+      },
       onFinal: (transcript) => {
         setLoopPhase("idle");
         setLoopTranscript("");
+        setSpeechActive(false);
         if (!voiceModeRef.current) return;
         const text = transcript.trim();
         if (text) {
@@ -137,7 +158,7 @@ export function Conversation({ onNavigate }: ConversationProps) {
         );
       },
     });
-  }, [stopVoiceMode]);
+  }, [stopVoiceMode, markSpeechActivity]);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -299,7 +320,7 @@ export function Conversation({ onNavigate }: ConversationProps) {
             // The phase class drives the panel's visual state: a pulsing teal
             // halo while listening ("the AI hears me"), indigo while speaking.
             <div className={`voice-loop-panel ${loopPhase}`}>
-              <VoiceWave phase={loopPhase} />
+              <VoiceWave phase={loopPhase} active={speechActive} />
               <span className="voice-loop-status">
                 {loopPhase === "listening"
                   ? "Your turn — speak now"
