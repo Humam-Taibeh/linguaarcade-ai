@@ -42,8 +42,8 @@ const XP_PER_EXCHANGE = 6;
 const OPENING_MESSAGE: DisplayMessage = {
   id: "opening",
   role: "model",
-  text: "Hi! I'm Lingua, your English conversation partner. Tell me about your day, a topic you love, or anything at all — I'll chat with you and point out any mistakes I notice.",
-  followUpQuestion: "So — what's something interesting that happened to you recently?",
+  text: "Yo! I'm Lingua — your English partner, not the grammar police. We just talk: your day, food, games, whatever. If something needs fixing, it shows up quietly in the little cards under my replies.",
+  followUpQuestion: "So, what's been the highlight of your week so far?",
 };
 
 interface ConversationProps {
@@ -296,7 +296,9 @@ export function Conversation({ onNavigate }: ConversationProps) {
           {error && <div className="error-banner">{error}</div>}
 
           {voiceMode && (
-            <div className="voice-loop-panel">
+            // The phase class drives the panel's visual state: a pulsing teal
+            // halo while listening ("the AI hears me"), indigo while speaking.
+            <div className={`voice-loop-panel ${loopPhase}`}>
               <VoiceWave phase={loopPhase} />
               <span className="voice-loop-status">
                 {loopPhase === "listening"
@@ -324,13 +326,20 @@ export function Conversation({ onNavigate }: ConversationProps) {
                 ))}
 
                 {message.followUpQuestion && (
-                  <div style={{ marginTop: 8, fontWeight: 600 }}>
-                    {message.followUpQuestion}
-                  </div>
+                  <div className="follow-up">{message.followUpQuestion}</div>
                 )}
               </div>
             ))}
-            {sending && <div className="typing-indicator">Lingua is thinking…</div>}
+            {sending && (
+              <div className="typing-indicator">
+                Lingua is thinking
+                <span className="typing-dots" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="chat-input-row">

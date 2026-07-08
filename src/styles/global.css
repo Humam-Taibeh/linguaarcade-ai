@@ -13,8 +13,9 @@
  * colors (success/warning/danger) use darker ink values in light mode
  * because the neon values that glow on dark fail AA on white.
  *
- * The font stack is intentionally system-native: zero font downloads keeps
- * first paint instant and the app fully offline-capable.
+ * Typography: Inter (variable, loaded with display=swap in index.html) is the
+ * app's voice; the system stack renders the first paint instantly and remains
+ * the offline fallback, so the upgrade costs nothing perceptible.
  */
 
 /* ---------------------------------------------------------------------------
@@ -30,8 +31,10 @@
   /* Theme cross-fade: applied to backgrounds/borders app-wide (see below). */
   --transition-theme: 280ms ease;
 
-  --font-stack: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont,
-    "Inter", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-stack: "Inter", "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont,
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Premium motion curve: fast start, long soft landing (easeOutQuint-like). */
+  --ease-premium: cubic-bezier(0.22, 1, 0.36, 1);
   --font-mono: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
 }
 
@@ -464,7 +467,8 @@ textarea.input,
 }
 
 .btn:active:not(:disabled) {
-  transform: translateY(0);
+  /* Tactile press: the button visibly "gives" under the finger. */
+  transform: translateY(0) scale(0.97);
 }
 
 .btn:disabled {
@@ -736,6 +740,27 @@ input[type="checkbox"] {
   background: var(--accent-tint-bg);
   border: 1px solid var(--accent-tint-border);
   animation: fade-in-up 260ms ease both;
+  transition: background var(--transition-slow), border-color var(--transition-slow);
+}
+
+/* Mic is hot: the whole panel breathes with a teal sonar pulse — the visual
+ * "I can hear you" signal the voice loop needs to feel alive. */
+.voice-loop-panel.listening {
+  background: var(--info-bg);
+  border-color: var(--info-border);
+  animation: listening-pulse 1.7s var(--ease-premium) infinite;
+}
+
+@keyframes listening-pulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--info-border);
+  }
+  70% {
+    box-shadow: 0 0 0 14px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
 }
 
 .voice-loop-status {
@@ -914,7 +939,9 @@ input[type="checkbox"] {
   padding: 12px 16px;
   border-radius: var(--radius-lg);
   font-size: 0.93rem;
-  animation: fade-in-up 260ms ease both;
+  /* Compositor-only entrance (opacity + transform): stays 60fps even while
+     the voice loop is mid-flight. */
+  animation: fade-in-up 340ms var(--ease-premium) both;
 }
 
 .msg.user {
@@ -941,29 +968,55 @@ input[type="checkbox"] {
   margin-bottom: 4px;
 }
 
+/* Correction flashcards: quiet, premium, inviting to read — neutral glass
+ * with an accent spine instead of an alarming warning tint. Cards cascade in
+ * with a slight stagger so multiple corrections feel dealt, not dumped. */
 .correction-card {
   margin-top: 10px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: var(--radius-md);
-  background: var(--warning-bg);
-  border: 1px solid var(--warning-border);
+  background: var(--surface-glass-strong);
+  border: 1px solid var(--border-glass);
+  border-inline-start: 3px solid var(--accent);
+  box-shadow: 0 4px 16px var(--shadow-card);
   font-size: 0.84rem;
+  line-height: 1.5;
+  animation: fade-in-up 360ms var(--ease-premium) both;
+}
+
+.correction-card + .correction-card {
+  animation-delay: 90ms;
+}
+
+.correction-card + .correction-card + .correction-card {
+  animation-delay: 180ms;
 }
 
 .correction-card .from {
   color: var(--danger);
   text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  opacity: 0.85;
 }
 
 .correction-card .to {
   color: var(--success);
-  font-weight: 600;
+  font-weight: 650;
 }
 
 .correction-card .why {
   display: block;
-  margin-top: 4px;
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px dashed var(--border-glass);
   color: var(--text-secondary);
+}
+
+/* The tutor's follow-up question: visually its own beat inside the bubble. */
+.msg .follow-up {
+  margin-top: 8px;
+  font-weight: 600;
+  color: var(--accent-bright);
 }
 
 .chat-input-row {
@@ -977,11 +1030,48 @@ input[type="checkbox"] {
 }
 
 .typing-indicator {
+  display: inline-flex;
+  align-items: baseline;
   align-self: flex-start;
   color: var(--text-faint);
   font-size: 0.86rem;
   padding: 6px 4px;
   animation: fade-in-up 200ms ease both;
+}
+
+.typing-dots {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 7px;
+}
+
+.typing-dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  animation: dot-bounce 1.2s ease-in-out infinite;
+}
+
+.typing-dots span:nth-child(2) {
+  animation-delay: 150ms;
+}
+
+.typing-dots span:nth-child(3) {
+  animation-delay: 300ms;
+}
+
+@keyframes dot-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -1149,18 +1239,20 @@ input[type="checkbox"] {
   flex: 1;
 }
 
+/* Every view mounts through this: navigation reads as one seamless surface
+ * morphing, never a page load. */
 .fade-in {
-  animation: fade-in-up 300ms ease both;
+  animation: fade-in-up 380ms var(--ease-premium) both;
 }
 
 @keyframes fade-in-up {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(10px) scale(0.985);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
