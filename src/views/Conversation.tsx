@@ -169,8 +169,7 @@ export function Conversation({ onNavigate }: ConversationProps) {
       setSending(true);
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", text: content }]);
 
-      // Rebuild API-shaped history from what is on screen. Model turns include
-      // the follow-up question so the tutor remembers what it asked.
+     // Rebuild API-shaped history from what is on screen.
       const history: ChatMessage[] = messages.map((m) => ({
         role: m.role,
         text: m.followUpQuestion ? `${m.text} ${m.followUpQuestion}` : m.text,
@@ -184,6 +183,7 @@ export function Conversation({ onNavigate }: ConversationProps) {
             geminiApiKey: settings.geminiApiKey,
             ollamaBaseUrl: settings.ollamaBaseUrl,
             ollamaModel: settings.ollamaModel,
+            groqApiKey: settings.groqApiKey || "", // هذا السطر اللي كان يسبب الخطأ
           },
           history,
           content
