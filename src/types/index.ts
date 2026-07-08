@@ -13,6 +13,7 @@ export type View =
   | "shadowing"
   | "review"
   | "conversation"
+  | "scenario"
   | "sentences"
   | "settings";
 
@@ -23,11 +24,13 @@ export type Strictness = "standard" | "strict";
 export type ThemeMode = "dark" | "light";
 
 /**
- * Which AI backend powers the Conversation tutor.
+ * Which AI backend powers the tutor. The selected engine is tried first;
+ * on failure the client fails over to the other *configured* engines.
+ * - "groq": Groq cloud (OpenAI-compatible, very fast open models).
  * - "gemini": Google Gemini cloud API, authenticated with the user's own key.
  * - "ollama": a local Ollama instance exposed through an ngrok tunnel.
  */
-export type AiEngine = "gemini" | "ollama";
+export type AiEngine = "groq" | "gemini" | "ollama";
 
 /** A user-authored practice sentence from the "My Sentences" module. */
 export interface Sentence {
@@ -78,9 +81,10 @@ export interface Profile {
 
 /** User preferences. The Gemini key lives here and is persisted to LocalStorage only. */
 export interface Settings {
-  /** Active tutor backend; switchable at any time from the Settings view. */
+  /** Preferred tutor backend; others act as automatic fallbacks. */
   aiEngine: AiEngine;
   geminiApiKey: string;
+  groqApiKey: string;
   /** ngrok tunnel origin for the local Ollama server, without a trailing path. */
   ollamaBaseUrl: string;
   /** Model tag served by the local Ollama instance (e.g. "llama3"). */

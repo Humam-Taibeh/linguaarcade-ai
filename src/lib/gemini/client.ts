@@ -1,18 +1,20 @@
 /**
- * Tutor API client for LinguaArcade AI — dual-engine architecture.
+ * Tutor API client for LinguaArcade AI — multi-engine, self-healing.
  *
- * Two interchangeable backends sit behind one `sendTutorMessage` entry point:
- * - "gemini": Google Gemini cloud (generativelanguage.googleapis.com), using
- *   the learner's own API key. JSON output is enforced via responseMimeType.
- * - "ollama": a local Ollama server tunneled through ngrok, speaking the
- *   OpenAI-compatible /v1/chat/completions dialect.
+ * Three interchangeable backends sit behind one entry point:
+ * - "groq": Groq cloud (api.groq.com, OpenAI-compatible, very fast).
+ * - "gemini": Google Gemini cloud (generativelanguage.googleapis.com).
+ * - "ollama": a local Ollama server tunneled through ngrok.
  *
- * The active engine is chosen per call from the persisted Settings (global
- * state), so the Settings view can flip backends without a reload. Both paths
- * normalize into the same strictly-validated TutorReply shape, so the UI
- * (correction cards, Voice Notes loop) never knows which engine answered.
+ * Redundancy: the user's preferred engine is tried first; if it fails for ANY
+ * reason (network, quota, dead tunnel, malformed reply) the client silently
+ * fails over to the other *configured* engines before surfacing an error.
+ * All paths normalize into the same strictly-validated TutorReply shape, so
+ * the UI (correction cards, Voice Notes loop) never knows which engine
+ * answered. The same machinery powers both the free Conversation tutor and
+ * the Scenario Studio roleplay via different system prompts.
  */
-import type { AiEngine } from "../../types";
+import type { AiEngine, Settings } from "../../types";
 
 export interface ChatMessage {
   role: "user" | "model";
@@ -35,12 +37,26 @@ export interface TutorReply {
 export interface EngineConfig {
   engine: AiEngine;
   geminiApiKey: string;
+  groqApiKey: string;
   ollamaBaseUrl: string;
   ollamaModel: string;
 }
 
+/** One place to slice Settings → EngineConfig, shared by every view. */
+export function engineConfigFromSettings(settings: Settings): EngineConfig {
+  return {
+    engine: settings.aiEngine,
+    geminiApiKey: settings.geminiApiKey,
+    groqApiKey: settings.groqApiKey,
+    ollamaBaseUrl: settings.ollamaBaseUrl,
+    ollamaModel: settings.ollamaModel,
+  };
+}
+
 const GEMINI_MODEL = "gemini-2.5-flash";
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const GROQ_MODEL = "llama-3.3-70b-versatile";
+const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
 
 /** Only the last N turns are sent — enough context, minimal latency. */
 const HISTORY_WINDOW = 10;
@@ -50,19 +66,64 @@ const MAX_OUTPUT_TOKENS = 512;
 export const TUTOR_SYSTEM_PROMPT = `You are "Lingua" — the learner's hype English coach inside the LinguaArcade AI app. Two friends practice spoken and written English with you. Your vibe: a witty native-speaker friend in their twenties, never a boring schoolteacher.
 
 Personality rules:
-1. Sound like a real friend: warm, playful, genuinely curious, with natural modern slang where it fits (fr, ngl, tbh, bet, lowkey, "that's fire"). Sprinkle at most 1-2 slang terms per reply — season, don't flood. Celebrate real wins briefly ("ngl, that sentence was clean").
+1. Sound like a real friend, never a formal teacher: warm, playful, genuinely curious, cracks a light joke when the moment invites it, with natural modern slang where it fits (fr, ngl, tbh, bet, lowkey, "that's fire"). Sprinkle at most 1-2 slang terms per reply — season, don't flood. Celebrate real wins briefly ("ngl, that sentence was clean").
 2. Keep replies to 2-4 short sentences of natural SPOKEN English — they are read aloud by text-to-speech. Never use emojis, asterisks, quotes-for-emphasis, or any formatting: TTS pronounces them out loud and ruins the flow.
 3. NEVER teach grammar inside "reply". The reply is pure conversation. Every correction lives ONLY in the corrections array — the app renders those as flashcards under your message. This invisible-correction style is the heart of the product.
 4. Deep analysis: catch every genuine grammar, vocabulary, word-choice, and unnatural-phrasing mistake (never invent one). Each "explanation" is one short, friendly sentence. Then casually reuse the corrected phrasing inside your reply so the learner hears it used right — that is how you correct "invisibly".
-5. Polyglot rule — two different cases:
-   a) The learner casually mixes Arabic into an English message (a word they didn't know, or slipped into habit): do NOT scold and do NOT reply in Arabic. React to what they meant, hand them the exact English phrase they were missing, and add a correction card with original = their Arabic words and corrected = the natural English version. Tease gently and pull them back — make English feel like the fun option, not homework.
-   b) The learner explicitly asks for help IN Arabic (e.g. "شو معنى..." / "كيف أقول..." / "ما فهمت"): be respectful, not evasive. Answer their actual question with one short, clear sentence — in Arabic if that's the fastest way to make it land — then immediately hand them the English version and pivot the very next sentence back into English to keep the practice going. Never lecture them for asking.
+5. Polyglot buddy rule — you code-switch like a bilingual friend, three cases:
+   a) The learner writes mostly in Arabic: reply the way a bilingual friend would — a short, warm Arabic reply naturally woven with English phrases and slang — then steer your follow-up question back into English. ALWAYS add correction card(s) with original = their Arabic sentence and corrected = the natural English version, so they collect the English they needed.
+   b) The learner explicitly asks for help in Arabic ("شو معنى..." / "كيف أقول..." / "ما فهمت"): be respectful, not evasive. Answer clearly (Arabic is fine), hand them the English version, and pivot the very next sentence seamlessly back into English. Never lecture them for asking.
+   c) The learner drops one or two Arabic words into an English message: react in English to what they meant, feed them the missing phrase, and add the Arabic → English correction card. Tease gently — make English feel like the fun option, not homework.
 6. Always end with followUpQuestion: one engaging question that pushes the conversation forward and, when possible, makes the learner reuse a word you just corrected (active recall).
 
 Output contract (absolute, no exceptions):
 Respond ONLY with a single raw JSON object — no markdown fences, no text before or after — matching exactly this schema:
 {"reply": "your conversational reply", "corrections": [{"original": "what they wrote", "corrected": "the fixed version", "explanation": "one short friendly sentence on why"}], "followUpQuestion": "your next question"}
 If there are no mistakes, "corrections" must be an empty array.`;
+
+/**
+ * Scenario Studio: Lingua plays Person A in a user-chosen scene while the
+ * learner improvises Person B. Same JSON contract as the tutor, so the whole
+ * chat UI (bubbles, correction cards, TTS) is reused unchanged.
+ */
+export function buildScenarioPrompt(scenario: string): string {
+  return `You are "Lingua" inside the LinguaArcade AI app, running Scenario Studio: immersive roleplay where the learner practices real-life spoken English.
+
+Scenario: "${scenario}"
+You play Person A — whichever character naturally drives this scene (the interviewer, the waiter, the border officer...). The learner improvises Person B.
+
+Rules:
+1. Your FIRST message only: set the scene in one short sentence (where we are, who you are), then deliver Person A's natural opening line.
+2. Every turn after that: stay fully in character. Natural spoken English, 1-3 short sentences, and always end your turn with a line that invites the learner's response. No emojis or formatting — your lines are read aloud by text-to-speech.
+3. Keep the invisible-correction discipline: never teach grammar inside "reply". Report every genuine mistake in the corrections array (original / corrected / explanation, one friendly sentence), then quietly reuse the corrected phrasing in a later line.
+4. If the learner is stuck or answers in Arabic, keep the scene moving: react in character and feed them the English line they needed through a correction card.
+5. "followUpQuestion" must be an empty string — your in-character line already carries the hook.
+
+Output contract (absolute, no exceptions):
+Respond ONLY with a single raw JSON object — no markdown fences, no text before or after — matching exactly:
+{"reply": "your in-character line", "corrections": [{"original": "...", "corrected": "...", "explanation": "..."}], "followUpQuestion": ""}
+If there are no mistakes, "corrections" must be an empty array.`;
+}
+
+/** Fun, conversational scene ideas for the Random Scenario button. */
+export const RANDOM_SCENARIOS: readonly string[] = [
+  "At the airport check-in desk with an overweight suitcase",
+  "Job interview for your dream role",
+  "Ordering at a fancy restaurant where everything is sold out",
+  "Haggling with a street market vendor",
+  "Doctor's appointment for a mysterious ache",
+  "You just met your favorite celebrity in an elevator",
+  "Lost in a new city, asking a local for directions",
+  "Coffee chat with a new coworker on your first day",
+  "Returning a broken product without the receipt",
+  "Planning a road trip with a friend on a tiny budget",
+  "Hotel check-in, but they lost your reservation",
+  "First session at the gym with an over-enthusiastic trainer",
+  "Calling tech support about wifi that only works in one corner",
+  "House-hunting with a very optimistic real estate agent",
+  "Small talk at a wedding where you know nobody",
+  "Convincing a friend to watch your favorite show",
+];
 
 export class TutorApiError extends Error {
   constructor(
@@ -155,10 +216,14 @@ export function sanitizeOllamaBaseUrl(raw: string): string {
   }
 }
 
-/** App history → OpenAI/Ollama messages array, system prompt first. */
-function toOpenAiMessages(history: ChatMessage[], userMessage: string): OpenAiChatMessage[] {
+/** App history → OpenAI-dialect messages array, system prompt first. */
+function toOpenAiMessages(
+  systemPrompt: string,
+  history: ChatMessage[],
+  userMessage: string
+): OpenAiChatMessage[] {
   return [
-    { role: "system", content: TUTOR_SYSTEM_PROMPT },
+    { role: "system", content: systemPrompt },
     ...history.slice(-HISTORY_WINDOW).map<OpenAiChatMessage>((msg) => ({
       role: msg.role === "model" ? "assistant" : "user",
       content: msg.text,
@@ -167,8 +232,63 @@ function toOpenAiMessages(history: ChatMessage[], userMessage: string): OpenAiCh
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Engine: Groq cloud (OpenAI ChatCompletions dialect)
+// ---------------------------------------------------------------------------
+
+async function sendViaGroq(
+  config: EngineConfig,
+  systemPrompt: string,
+  history: ChatMessage[],
+  userMessage: string
+): Promise<string> {
+  const apiKey = config.groqApiKey.trim();
+  if (!apiKey) {
+    throw new TutorApiError("No Groq API key is configured. Add one in Settings.");
+  }
+
+  const body = {
+    model: GROQ_MODEL,
+    messages: toOpenAiMessages(systemPrompt, history, userMessage),
+    temperature: TEMPERATURE,
+    max_tokens: MAX_OUTPUT_TOKENS,
+    response_format: { type: "json_object" },
+  };
+
+  let response: Response;
+  try {
+    response = await fetch(GROQ_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new TutorApiError("Could not reach the Groq API — check your internet connection.");
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    throw new TutorApiError(
+      "Groq rejected the API key. Verify it in Settings (console.groq.com).",
+      response.status
+    );
+  }
+  if (response.status === 429) {
+    throw new TutorApiError("Groq rate limit reached — falling back shortly.", response.status);
+  }
+  if (!response.ok) {
+    throw new TutorApiError(`Groq API error (HTTP ${response.status}).`, response.status);
+  }
+
+  const data = (await response.json()) as OpenAiChatResponse;
+  return data.choices?.[0]?.message?.content ?? "";
+}
+
 async function sendViaOllama(
   config: EngineConfig,
+  systemPrompt: string,
   history: ChatMessage[],
   userMessage: string
 ): Promise<string> {
@@ -179,7 +299,7 @@ async function sendViaOllama(
 
   const body = {
     model: config.ollamaModel.trim() || "llama3",
-    messages: toOpenAiMessages(history, userMessage),
+    messages: toOpenAiMessages(systemPrompt, history, userMessage),
     temperature: TEMPERATURE,
     max_tokens: MAX_OUTPUT_TOKENS,
     response_format: { type: "json_object" },
@@ -252,6 +372,7 @@ interface GeminiResponse {
 
 async function sendViaGemini(
   config: EngineConfig,
+  systemPrompt: string,
   history: ChatMessage[],
   userMessage: string
 ): Promise<string> {
@@ -269,7 +390,7 @@ async function sendViaGemini(
   ];
 
   const body = {
-    systemInstruction: { parts: [{ text: TUTOR_SYSTEM_PROMPT }] },
+    systemInstruction: { parts: [{ text: systemPrompt }] },
     contents,
     generationConfig: {
       temperature: TEMPERATURE,
@@ -314,27 +435,100 @@ async function sendViaGemini(
 }
 
 // ---------------------------------------------------------------------------
-// Public entry point
+// Public entry point — unified wrapper with automatic failover
 // ---------------------------------------------------------------------------
 
+/** Fallback priority when the preferred engine fails: fast cloud → cloud → local. */
+const FAILOVER_ORDER: readonly AiEngine[] = ["groq", "gemini", "ollama"];
+
+/** True when the engine has the credentials/URL it needs to be attempted. */
+export function isEngineConfigured(engine: AiEngine, config: EngineConfig): boolean {
+  switch (engine) {
+    case "groq":
+      return config.groqApiKey.trim().length > 0;
+    case "gemini":
+      return config.geminiApiKey.trim().length > 0;
+    case "ollama":
+      return sanitizeOllamaBaseUrl(config.ollamaBaseUrl).length > 0;
+  }
+}
+
+/** True when at least one engine can be attempted (chat UIs gate on this). */
+export function hasConfiguredEngine(config: EngineConfig): boolean {
+  return FAILOVER_ORDER.some((engine) => isEngineConfigured(engine, config));
+}
+
+function sendViaEngine(
+  engine: AiEngine,
+  config: EngineConfig,
+  systemPrompt: string,
+  history: ChatMessage[],
+  userMessage: string
+): Promise<string> {
+  switch (engine) {
+    case "groq":
+      return sendViaGroq(config, systemPrompt, history, userMessage);
+    case "gemini":
+      return sendViaGemini(config, systemPrompt, history, userMessage);
+    case "ollama":
+      return sendViaOllama(config, systemPrompt, history, userMessage);
+  }
+}
+
 /**
- * Send one conversation turn through whichever engine the user selected in
- * Settings. Both engines return the same validated TutorReply, so callers
- * (including the Voice Notes loop) are engine-agnostic.
+ * The redundancy core: try the preferred engine, then silently fail over to
+ * every other configured engine. A malformed/empty reply counts as a failure
+ * too, so a rambling local model can be rescued by a cloud engine mid-chat.
+ * Only when the whole chain is exhausted does the last error reach the UI.
  */
-export async function sendTutorMessage(
+async function requestReply(
+  config: EngineConfig,
+  systemPrompt: string,
+  history: ChatMessage[],
+  userMessage: string
+): Promise<TutorReply> {
+  const chain = [
+    config.engine,
+    ...FAILOVER_ORDER.filter((engine) => engine !== config.engine),
+  ].filter((engine) => isEngineConfigured(engine, config));
+
+  if (chain.length === 0) {
+    throw new TutorApiError(
+      "No AI engine is configured yet. Add a Groq or Gemini key (or the Ollama tunnel URL) in Settings."
+    );
+  }
+
+  let lastError: TutorApiError | null = null;
+  for (const engine of chain) {
+    try {
+      const rawText = await sendViaEngine(engine, config, systemPrompt, history, userMessage);
+      if (!rawText) {
+        throw new TutorApiError("The AI returned an empty response.");
+      }
+      return toTutorReply(extractJsonObject(rawText));
+    } catch (err) {
+      lastError =
+        err instanceof TutorApiError ? err : new TutorApiError("Unexpected engine failure.");
+    }
+  }
+  throw lastError ?? new TutorApiError("All AI engines failed. Please try again.");
+}
+
+/** One turn with the free-talk tutor persona (Conversation view). */
+export function sendTutorMessage(
   config: EngineConfig,
   history: ChatMessage[],
   userMessage: string
 ): Promise<TutorReply> {
-  const rawText =
-    config.engine === "gemini"
-      ? await sendViaGemini(config, history, userMessage)
-      : await sendViaOllama(config, history, userMessage);
+  return requestReply(config, TUTOR_SYSTEM_PROMPT, history, userMessage);
+}
 
-  if (!rawText) {
-    throw new TutorApiError("The AI returned an empty response. Please try sending again.");
-  }
-
-  return toTutorReply(extractJsonObject(rawText));
+/** One turn of Scenario Studio roleplay, with Lingua as Person A. */
+export function sendScenarioMessage(
+  config: EngineConfig,
+  scenario: string,
+  history: ChatMessage[],
+  userMessage: string
+): Promise<TutorReply> {
+  return requestReply(config, buildScenarioPrompt(scenario), history, userMessage);
 }

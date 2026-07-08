@@ -52,6 +52,7 @@ const DEFAULT_SETTINGS: Settings = {
   // route every conversation through the local tunnel.
   aiEngine: "ollama",
   geminiApiKey: "",
+  groqApiKey: "",
   ollamaBaseUrl: "https://handwrite-oboe-cozy.ngrok-free.dev",
   ollamaModel: "llama3",
   voiceURI: "",
