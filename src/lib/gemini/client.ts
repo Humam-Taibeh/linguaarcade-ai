@@ -1,15 +1,11 @@
 /**
- * Google Gemini API client for the conversational tutor.
+ * Local Ollama API client via ngrok tunnel for LinguaArcade AI.
  *
  * Design decisions:
- *  - The key is sent via the `x-goog-api-key` header, never as a URL query
- *    parameter, so it cannot leak into browser history, proxy logs, or
- *    Referer headers.
- *  - We request `responseMimeType: "application/json"` and pin the reply to a
- *    strict schema in the system prompt, because the UI renders structured
- *    correction cards — free-form prose would be unparseable.
- *  - Everything is plain `fetch`: no SDK dependency means no supply-chain
- *    surface and no bundle bloat for a single endpoint.
+ *  - Fully detached from Google Gemini cloud infrastructure to eliminate quota limits.
+ *  - Routes all conversation turns to the local Ollama instance running on the home GPU.
+ *  - Normalizes the Gemini history payload into standard ChatCompletion messages array
+ *    safely readable by llama3 or any open-source local model.
  */
 
 export interface ChatMessage {
@@ -29,12 +25,13 @@ export interface TutorReply {
   followUpQuestion: string;
 }
 
-const API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
-const MODEL = "gemini-2.0-flash";
+// Fixed endpoint tunnel pointed to your local home server setup
+const API_BASE = "https://handwrite-oboe-cozy.ngrok-free.dev/v1/chat/completions";
+const MODEL = "llama3";
 
 /**
- * The tutor persona. Kept in one exported constant so the behavior of the AI
- * partner is reviewable and tweakable in a single place.
+ * The tutor persona system instructions. Pinned strictly within the system role
+ * to force local open-source models to follow JSON output constraints.
  */
 export const TUTOR_SYSTEM_PROMPT = `You are "Lingua", a warm but rigorous English conversation tutor inside the LinguaArcade AI app. The learner practices spoken and written English with you.
 
@@ -57,15 +54,15 @@ export class GeminiError extends Error {
 }
 
 /**
- * Some models still wrap JSON in markdown fences despite the mime-type hint.
- * This defensively extracts the first JSON object from the raw text.
+ * Open-source local models frequently disregard the JSON mime-type instructions
+ * and wrap the block inside markdown fences. This extracts the clean raw JSON block object defensively.
  */
 function extractJsonObject(raw: string): unknown {
   const trimmed = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   const start = trimmed.indexOf("{");
   const end = trimmed.lastIndexOf("}");
   if (start === -1 || end === -1 || end <= start) {
-    throw new GeminiError("The AI reply was not valid JSON.");
+    throw new GeminiError("The local AI model reply was not valid JSON. Please try rephrasing.");
   }
   return JSON.parse(trimmed.slice(start, end + 1));
 }
@@ -93,72 +90,62 @@ function toTutorReply(parsed: unknown): TutorReply {
 }
 
 /**
- * Send one turn of conversation. `history` carries prior turns so the tutor
- * has context; we cap it to the last 20 messages to bound request size while
- * keeping enough context for coherent conversation.
+ * Send one turn of conversation directly down the ngrok tunnel to the local home GPU.
+ * Formats data structure cleanly for OpenAI/Ollama ChatCompletion runtime parameters.
  */
 export async function sendTutorMessage(
-  apiKey: string,
+  apiKey: string, // Kept to respect existing call configurations (can contain tunnel url or dummy data)
   history: ChatMessage[],
   userMessage: string
 ): Promise<TutorReply> {
-  if (!apiKey.trim()) {
-    throw new GeminiError("No Gemini API key configured. Add one in Settings.");
-  }
-
+  
   const recentHistory = history.slice(-20);
+  
+  // Transform the existing application state layout into standard ChatCompletion structures
+  const messagesPayload = [
+    { role: "system", content: TUTOR_SYSTEM_PROMPT },
+    ...recentHistory.map((msg) => ({
+      role: msg.role === "model" ? "assistant" : "user",
+      content: msg.text,
+    })),
+    { role: "user", content: userMessage }
+  ];
+
   const body = {
-    systemInstruction: { parts: [{ text: TUTOR_SYSTEM_PROMPT }] },
-    contents: [
-      ...recentHistory.map((message) => ({
-        role: message.role,
-        parts: [{ text: message.text }],
-      })),
-      { role: "user", parts: [{ text: userMessage }] },
-    ],
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 1024,
-      responseMimeType: "application/json",
-    },
+    model: MODEL,
+    messages: messagesPayload,
+    temperature: 0.7,
+    max_tokens: 1024,
+    response_format: { type: "json_object" } // Enforce native JSON output constraints in Ollama
   };
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}/${MODEL}:generateContent`, {
+    response = await fetch(API_BASE, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey.trim(),
+        "Content-Type": "application/json"
       },
       body: JSON.stringify(body),
     });
   } catch {
-    throw new GeminiError("Network error — check your internet connection.");
+    throw new GeminiError("Tunnel connection failed — ensure your local ngrok instance is active and running.");
   }
 
   if (!response.ok) {
-    if (response.status === 400 || response.status === 401 || response.status === 403) {
-      throw new GeminiError("The Gemini API rejected your key. Verify it in Settings.", response.status);
+    if (response.status === 404) {
+      throw new GeminiError("Model endpoint target not found. Make sure 'ollama run llama3' is active on your PC.");
     }
-    if (response.status === 429) {
-      throw new GeminiError("Rate limit reached — wait a moment and try again.", response.status);
-    }
-    throw new GeminiError(`Gemini API error (HTTP ${response.status}).`, response.status);
+    throw new GeminiError(`Local Server Error (HTTP Status: ${response.status}).`, response.status);
   }
 
-  const data: unknown = await response.json();
-  const text = (() => {
-    // Defensive descent through the candidates structure; any missing level
-    // means the model returned nothing usable (e.g. a safety block).
-    const d = data as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-    return d.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  })();
+  const data: any = await response.json();
+  
+  // Extract content out of standard OpenAI/Ollama return paths
+  const text = data?.choices?.[0]?.message?.content ?? "";
 
   if (!text) {
-    throw new GeminiError("The AI returned an empty reply. Try rephrasing.");
+    throw new GeminiError("The local AI returned an empty response block. Please try sending again.");
   }
 
   return toTutorReply(extractJsonObject(text));
