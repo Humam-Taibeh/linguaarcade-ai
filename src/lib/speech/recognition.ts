@@ -139,7 +139,16 @@ export class SpeechRecognizer {
     };
 
     this.recognition = recognition;
-    recognition.start();
+    try {
+      recognition.start();
+    } catch {
+      // iOS Safari throws InvalidStateError when a previous session is still
+      // tearing down (abort() racing a pending onend). Surface it as a normal
+      // recognition error so the UI resets cleanly instead of crashing.
+      this.active = false;
+      this.recognition = null;
+      callbacks.onError("start-failed");
+    }
   }
 
   /** Graceful stop: flushes pending audio, then onend delivers the final text. */

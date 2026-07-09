@@ -161,9 +161,25 @@ export async function speak(text: string, options: SpeakOptions = {}): Promise<v
     const voice = requested ?? pickPremiumVoice(voices);
     if (voice) utterance.voice = voice;
 
-    utterance.onend = () => resolve();
-    utterance.onerror = () => resolve();
+    // iOS watchdog: Safari occasionally never fires `end` (screen lock,
+    // interrupted audio session, cancel() racing speak()). The voice loop
+    // AWAITS this promise, so a lost event would freeze the loop forever —
+    // the generous length-scaled ceiling guarantees it always resolves.
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(watchdog);
+      resolve();
+    };
+    const watchdog = window.setTimeout(settle, Math.min(60_000, 4000 + text.length * 120));
+
+    utterance.onend = settle;
+    utterance.onerror = settle;
     window.speechSynthesis.speak(utterance);
+    // iOS/Chrome quirk: a cancel() immediately before speak() can leave the
+    // engine paused; resume() is a no-op everywhere else.
+    window.speechSynthesis.resume();
   });
 }
 

@@ -334,6 +334,11 @@ export function useVoiceChat(options: UseVoiceChatOptions): UseVoiceChatResult {
       stopVoiceMode();
       return;
     }
+    // Reclaim the mic from an in-flight dictation session. abort() fires no
+    // callbacks, so the stale dictation onFinal can never write into the
+    // draft (or flip `dictating`) after the loop has taken over.
+    recognizerRef.current?.abort();
+    setDictating(false);
     setError(null);
     voiceModeRef.current = true;
     setVoiceMode(true);
@@ -348,6 +353,11 @@ export function useVoiceChat(options: UseVoiceChatOptions): UseVoiceChatResult {
       recognizer.stop();
       return;
     }
+    // The voice loop owns the microphone while active. Browsers allow only
+    // one live recognition session — a second start() would silently no-op,
+    // stranding `dictating` at true and letting the next tap kill the loop's
+    // session instead of a dictation one.
+    if (voiceModeRef.current || recognizer.isActive) return;
     setDictating(true);
     recognizer.start({
       onInterim: () => {
