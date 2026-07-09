@@ -1,12 +1,18 @@
 /**
- * Settings — AI engine selection (Gemini cloud vs. local Ollama), API key and
+ * Settings — AI engine selection (Groq / Gemini / local Ollama), API key and
  * tunnel management, voice tuning, scorer strictness, and the (guarded)
  * progress reset.
  *
- * Security posture for the API key: it lives exclusively in this browser's
- * LocalStorage, is rendered as a password field, and is transmitted only to
- * Google's Gemini endpoint over HTTPS via a request header. It never touches
- * any server owned by this project — there isn't one.
+ * ⚠️ SECURITY — API keys in localStorage:
+ * Every credential on this page (Gemini key, Groq key, tunnel URL) is stored
+ * ONLY in this browser's localStorage and sent ONLY to its own provider over
+ * HTTPS — there is no project server. But localStorage is NOT encrypted:
+ * any script that ever runs on this origin (an XSS bug, a malicious browser
+ * extension) or anyone with physical access to the unlocked device can read
+ * it. Mitigations we rely on: keys are user-owned free-tier keys that the
+ * user can revoke/rotate at any time from the provider dashboard, inputs
+ * render as password fields, and nothing is ever committed or logged. Do not
+ * paste billing-enabled production keys into this app.
  */
 import { useEffect, useState } from "react";
 import { useAppState } from "../state/AppStateContext";

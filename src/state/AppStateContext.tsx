@@ -48,12 +48,16 @@ const DEFAULT_PROFILE: Profile = {
 };
 
 const DEFAULT_SETTINGS: Settings = {
-  // "ollama" preserves the behavior of existing installs, which currently
-  // route every conversation through the local tunnel.
+  // Preferred engine only — the client automatically fails over to whichever
+  // other engines the user has configured.
   aiEngine: "ollama",
   geminiApiKey: "",
   groqApiKey: "",
-  ollamaBaseUrl: "https://handwrite-oboe-cozy.ngrok-free.dev",
+  // Security: never ship a default tunnel URL. A hardcoded personal domain in
+  // the bundle is publicly readable by anyone who opens the deployed JS; each
+  // user enters their own tunnel in Settings instead. Existing installs are
+  // unaffected — their saved URL wins via the persisted-state merge below.
+  ollamaBaseUrl: "",
   ollamaModel: "llama3",
   voiceURI: "",
   speechRate: 0.9,
