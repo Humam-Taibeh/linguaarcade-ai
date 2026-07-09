@@ -13,6 +13,7 @@ import { Dashboard } from "./views/Dashboard";
 import { ShadowingStudio } from "./views/ShadowingStudio";
 import { ReviewStudio } from "./views/ReviewStudio";
 import { Conversation } from "./views/Conversation";
+import { ScenarioStudio } from "./views/ScenarioStudio";
 import { MySentences } from "./views/MySentences";
 import { SettingsView } from "./views/Settings";
 import type { View } from "./types";
@@ -42,6 +43,7 @@ export default function App() {
           {view === "shadowing" && <ShadowingStudio practiceRequest={practiceRequest} />}
           {view === "review" && <ReviewStudio />}
           {view === "conversation" && <Conversation onNavigate={setView} />}
+          {view === "scenario" && <ScenarioStudio onNavigate={setView} />}
           {view === "sentences" && <MySentences onPractice={handlePracticeSentence} />}
           {view === "settings" && <SettingsView />}
         </main>

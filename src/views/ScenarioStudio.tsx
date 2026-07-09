@@ -9,7 +9,7 @@
  * The active session (scenario + transcript) persists to localStorage, so a
  * reload or a dead engine never loses the scene.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   sendScenarioMessage,
   engineConfigFromSettings,
@@ -52,6 +52,7 @@ export function ScenarioStudio({ onNavigate }: ScenarioStudioProps) {
   const [error, setError] = useState<string | null>(null);
 
   const [recognizer] = useState(() => new SpeechRecognizer());
+  const chatWindowRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     return () => {
@@ -59,6 +60,12 @@ export function ScenarioStudio({ onNavigate }: ScenarioStudioProps) {
       stopSpeaking();
     };
   }, [recognizer]);
+
+  // Keep the newest line in view as the scene grows.
+  useEffect(() => {
+    const el = chatWindowRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, sending]);
 
   // Persist on every transition so nothing is ever lost mid-scene.
   useEffect(() => {
@@ -259,15 +266,22 @@ export function ScenarioStudio({ onNavigate }: ScenarioStudioProps) {
         <div className="glass chat-card">
           {error && <div className="error-banner">{error}</div>}
 
-          <div className="row" style={{ marginBottom: 12 }}>
-            <span className="pill accent">🎬 {scenario}</span>
-            <span className="spacer" />
+          <div className="scene-bar">
+            <span className="scene-avatar" aria-hidden="true">
+              🎭
+            </span>
+            <div className="scene-info">
+              <div className="scene-title">{scenario}</div>
+              <div className="scene-status">
+                {sending ? "typing…" : "Lingua · in character"}
+              </div>
+            </div>
             <button type="button" className="btn btn-ghost" onClick={endScenario}>
-              ✖ End scene
+              ✖ End
             </button>
           </div>
 
-          <div className="chat-window">
+          <div className="chat-window" ref={chatWindowRef}>
             {messages.map((message) => (
               <div key={message.id} className={`msg ${message.role}`}>
                 <div>{message.text}</div>
@@ -285,8 +299,7 @@ export function ScenarioStudio({ onNavigate }: ScenarioStudioProps) {
               </div>
             ))}
             {sending && (
-              <div className="typing-indicator">
-                Lingua is in character
+              <div className="typing-indicator" role="status" aria-label="Lingua is typing">
                 <span className="typing-dots" aria-hidden="true">
                   <span />
                   <span />

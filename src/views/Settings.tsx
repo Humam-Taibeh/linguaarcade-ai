@@ -93,11 +93,19 @@ export function SettingsView() {
             <div className="row" role="radiogroup" aria-label="AI engine">
               <button
                 type="button"
+                className={`btn ${settings.aiEngine === "groq" ? "btn-primary" : "btn-ghost"}`}
+                aria-pressed={settings.aiEngine === "groq"}
+                onClick={() => handleEngineChange("groq")}
+              >
+                ⚡ Groq
+              </button>
+              <button
+                type="button"
                 className={`btn ${settings.aiEngine === "gemini" ? "btn-primary" : "btn-ghost"}`}
                 aria-pressed={settings.aiEngine === "gemini"}
                 onClick={() => handleEngineChange("gemini")}
               >
-                ☁️ Gemini Cloud
+                ☁️ Gemini
               </button>
               <button
                 type="button"
@@ -105,13 +113,16 @@ export function SettingsView() {
                 aria-pressed={settings.aiEngine === "ollama"}
                 onClick={() => handleEngineChange("ollama")}
               >
-                🖥️ Local Ollama
+                🖥️ Ollama
               </button>
             </div>
             <span className="hint">
-              {settings.aiEngine === "gemini"
-                ? "Conversations go to Google's Gemini API using your key below. Works anywhere, no PC required."
-                : "Conversations go to Ollama on your PC through the ngrok tunnel below. Your PC, Ollama, and ngrok must be running."}
+              {settings.aiEngine === "groq"
+                ? "Groq's lightning-fast cloud models answer first. Works anywhere, no PC required."
+                : settings.aiEngine === "gemini"
+                  ? "Conversations go to Google's Gemini API using your key below. Works anywhere, no PC required."
+                  : "Conversations go to Ollama on your PC through the ngrok tunnel below. Your PC, Ollama, and ngrok must be running."}
+              {" "}If this engine fails, the app automatically retries with your other configured engines.
             </span>
           </div>
         </div>

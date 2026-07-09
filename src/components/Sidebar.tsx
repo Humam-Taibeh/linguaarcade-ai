@@ -18,6 +18,7 @@ const NAV_ENTRIES: NavEntry[] = [
   { view: "shadowing", label: "Shadowing Studio", icon: "🎙️" },
   { view: "review", label: "Review Studio", icon: "🔁" },
   { view: "conversation", label: "AI Conversation", icon: "💬" },
+  { view: "scenario", label: "Scenario Studio", icon: "🎭" },
   { view: "sentences", label: "My Sentences", icon: "📝" },
   { view: "settings", label: "Settings", icon: "⚙️" },
 ];

@@ -16,11 +16,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   sendTutorMessage,
+  engineConfigFromSettings,
+  hasConfiguredEngine,
   TutorApiError,
   type ChatMessage,
   type Correction,
   type TutorReply,
 } from "../lib/gemini/client";
+import { loadConversation, saveConversation, clearConversation } from "../lib/chatStore";
 import { SpeechRecognizer, isRecognitionSupported } from "../lib/speech/recognition";
 import { speak, stopSpeaking } from "../lib/speech/synthesis";
 import { playXpBlip } from "../lib/audio/chimes";
@@ -54,7 +57,11 @@ export function Conversation({ onNavigate }: ConversationProps) {
   const { state, dispatch } = useAppState();
   const { settings } = state;
 
-  const [messages, setMessages] = useState<DisplayMessage[]>([OPENING_MESSAGE]);
+  // Resume the persisted transcript — the chat survives reloads, navigation,
+  // and even the AI backend dying mid-session.
+  const [messages, setMessages] = useState<DisplayMessage[]>(
+    () => loadConversation() ?? [OPENING_MESSAGE]
+  );
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [dictating, setDictating] = useState(false);
@@ -90,6 +97,11 @@ export function Conversation({ onNavigate }: ConversationProps) {
     const el = chatWindowRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, sending]);
+
+  // Persist every transition so nothing is ever lost.
+  useEffect(() => {
+    saveConversation(messages);
+  }, [messages]);
 
   useEffect(() => {
     const recognizer = recognizerRef.current;
@@ -177,17 +189,7 @@ export function Conversation({ onNavigate }: ConversationProps) {
 
       let reply: TutorReply | null = null;
       try {
-        reply = await sendTutorMessage(
-          {
-            engine: settings.aiEngine,
-            geminiApiKey: settings.geminiApiKey,
-            ollamaBaseUrl: settings.ollamaBaseUrl,
-            ollamaModel: settings.ollamaModel,
-            groqApiKey: settings.groqApiKey || "", // هذا السطر اللي كان يسبب الخطأ
-          },
-          history,
-          content
-        );
+        reply = await sendTutorMessage(engineConfigFromSettings(settings), history, content);
       } catch (err) {
         setError(err instanceof TutorApiError ? err.message : "Unexpected error — try again.");
         if (voiceModeRef.current) stopVoiceMode();
@@ -297,12 +299,19 @@ export function Conversation({ onNavigate }: ConversationProps) {
     void sendMessage(text);
   };
 
-  // The chat is usable when the *active* engine is configured: Gemini needs a
-  // key, Ollama needs a tunnel URL. Otherwise the Offline Bridge takes over.
-  const engineReady =
-    settings.aiEngine === "gemini"
-      ? settings.geminiApiKey.trim().length > 0
-      : settings.ollamaBaseUrl.trim().length > 0;
+  const handleNewChat = () => {
+    if (voiceModeRef.current) stopVoiceMode();
+    stopSpeaking();
+    clearConversation();
+    setMessages([OPENING_MESSAGE]);
+    setDraft("");
+    setError(null);
+  };
+
+  // The chat is usable when ANY engine is configured — failover means the
+  // preferred one doesn't have to be the working one. Otherwise the Offline
+  // Bridge takes over.
+  const engineReady = hasConfiguredEngine(engineConfigFromSettings(settings));
 
   return (
     // view-fill: this view owns the full pane height — the page never
@@ -359,8 +368,7 @@ export function Conversation({ onNavigate }: ConversationProps) {
               </div>
             ))}
             {sending && (
-              <div className="typing-indicator">
-                Lingua is thinking
+              <div className="typing-indicator" role="status" aria-label="Lingua is typing">
                 <span className="typing-dots" aria-hidden="true">
                   <span />
                   <span />
@@ -429,6 +437,15 @@ export function Conversation({ onNavigate }: ConversationProps) {
               Read replies aloud
             </label>
             <span className="spacer" />
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={handleNewChat}
+              disabled={sending}
+              title="Start a fresh conversation (clears the saved transcript)"
+            >
+              🗑️ New chat
+            </button>
             <span className="pill accent">+{XP_PER_EXCHANGE} XP per exchange</span>
           </div>
         </div>
