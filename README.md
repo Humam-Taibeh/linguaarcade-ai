@@ -28,7 +28,6 @@ LinguaArcade AI is a fully static, serverless single-page application. Your prog
 | Browser | Chrome or Edge (latest) | The Web Speech **recognition** API is Chromium-only; TTS works everywhere |
 | Microphone | Any | Required for shadowing & dictation |
 | [Gemini API key](https://aistudio.google.com) | Free tier works | Optional — only needed for the AI Conversation module |
-| Docker | ≥ 24 (optional) | Only for containerized deployment |
 
 > **Note:** browsers only expose the microphone in a *secure context* — `http://localhost` or any HTTPS origin.
 
@@ -63,15 +62,6 @@ npm run lint       # ESLint (flat config, TS-aware)
 npm run typecheck  # tsc --strict, app + tooling configs
 ```
 
-### Docker deployment
-
-```bash
-docker compose up --build
-# → open http://localhost:8080
-```
-
-The image is a two-stage build: Node 20 compiles the bundle, then a ~10 MB nginx Alpine image serves it with SPA fallback, immutable asset caching, and security headers. No Node runtime ships to production.
-
 ---
 
 ## 🔑 Activating the AI Conversation partner
@@ -90,7 +80,7 @@ The key is stored **only** in your browser's LocalStorage and transmitted **only
 linguaarcade-ai/
 ├── .github/
 │   └── workflows/
-│       └── ci.yml                  # Lint + typecheck + build + Docker CI pipeline
+│       └── ci.yml                  # Lint + typecheck + build CI pipeline
 ├── src/
 │   ├── components/                 # Reusable presentational components
 │   │   ├── ScoreRing.tsx           #   Animated SVG accuracy gauge
@@ -121,10 +111,7 @@ linguaarcade-ai/
 │   │   ├── Settings.tsx            # API key, voice, strictness, reset
 │   │   └── ShadowingStudio.tsx     # Listen → shadow → score core loop
 │   ├── App.tsx                     # View routing + cross-view practice hand-off
-│   └── main.tsx                    # Entry point
-├── Dockerfile                      # Two-stage build: Node 20 → nginx Alpine
-├── docker-compose.yml
-├── nginx.conf                      # SPA fallback + caching + security headers
+│   └── main.tsx                    # Entry point (global ErrorBoundary lives here)
 ├── index.html
 ├── package.json
 ├── tsconfig.json / tsconfig.node.json

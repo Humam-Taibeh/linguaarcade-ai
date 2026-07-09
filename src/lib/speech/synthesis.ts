@@ -11,31 +11,55 @@ export function isSynthesisSupported(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
-/** Resolve the browser's English voices, waiting for async population. */
-export function getEnglishVoices(): Promise<SpeechSynthesisVoice[]> {
-  return new Promise((resolve) => {
+/**
+ * Module-level cached voice loading. iOS Safari (and Chrome) populate
+ * getVoices() asynchronously — the first synchronous call returns [] and the
+ * real list arrives with the "voiceschanged" event. Every TTS consumer awaits
+ * this ONE shared promise, so the race is paid at most once per page load.
+ *
+ * A resolved-empty result does NOT poison the cache: if the timeout fires
+ * before the event on a slow device, the next caller retries instead of being
+ * stuck with the robotic default voice forever.
+ */
+let voicesReadyPromise: Promise<SpeechSynthesisVoice[]> | null = null;
+
+export function voicesReady(): Promise<SpeechSynthesisVoice[]> {
+  if (voicesReadyPromise) return voicesReadyPromise;
+
+  voicesReadyPromise = new Promise<SpeechSynthesisVoice[]>((resolve) => {
     if (!isSynthesisSupported()) {
       resolve([]);
       return;
     }
-    const pickEnglish = (voices: SpeechSynthesisVoice[]) =>
-      voices.filter((v) => v.lang.toLowerCase().startsWith("en"));
-
     const immediate = window.speechSynthesis.getVoices();
     if (immediate.length > 0) {
-      resolve(pickEnglish(immediate));
+      resolve(immediate);
       return;
     }
     // Voices not loaded yet: wait for the event, with a timeout fallback so a
     // browser that never fires it (some WebViews) can't hang the caller.
-    const timer = window.setTimeout(() => {
-      resolve(pickEnglish(window.speechSynthesis.getVoices()));
-    }, 2000);
-    window.speechSynthesis.onvoiceschanged = () => {
-      window.clearTimeout(timer);
-      resolve(pickEnglish(window.speechSynthesis.getVoices()));
-    };
+    const settle = () => resolve(window.speechSynthesis.getVoices());
+    const timer = window.setTimeout(settle, 2000);
+    window.speechSynthesis.addEventListener(
+      "voiceschanged",
+      () => {
+        window.clearTimeout(timer);
+        settle();
+      },
+      { once: true }
+    );
+  }).then((voices) => {
+    if (voices.length === 0) voicesReadyPromise = null; // allow a later retry
+    return voices;
   });
+
+  return voicesReadyPromise;
+}
+
+/** Resolve the browser's English voices, waiting for async population. */
+export async function getEnglishVoices(): Promise<SpeechSynthesisVoice[]> {
+  const voices = await voicesReady();
+  return voices.filter((v) => v.lang.toLowerCase().startsWith("en"));
 }
 
 /**
@@ -110,16 +134,18 @@ export interface SpeakOptions {
  * both outcomes lets callers use `await speak(...)` to sequence
  * listen-then-record flows without special error plumbing.
  */
-export function speak(text: string, options: SpeakOptions = {}): Promise<void> {
-  return new Promise((resolve) => {
-    if (!isSynthesisSupported() || !text.trim()) {
-      resolve();
-      return;
-    }
-    // Cancel anything already queued: overlapping utterances during shadowing
-    // practice is always a bug, never a feature.
-    window.speechSynthesis.cancel();
+export async function speak(text: string, options: SpeakOptions = {}): Promise<void> {
+  if (!isSynthesisSupported() || !text.trim()) return;
 
+  // Cancel anything already queued: overlapping utterances during shadowing
+  // practice is always a bug, never a feature.
+  window.speechSynthesis.cancel();
+
+  // iOS race fix: wait for the async voice list before resolving the voice.
+  // Cached after the first load, so this is a microtask on every later call.
+  const voices = await voicesReady();
+
+  return new Promise((resolve) => {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = "en-US";
     utterance.rate = options.rate ?? 0.9;
@@ -129,7 +155,6 @@ export function speak(text: string, options: SpeakOptions = {}): Promise<void> {
     // Voice resolution: the user's explicit pick wins; otherwise auto-select
     // the most natural voice this device offers instead of the browser
     // default (which is often the most robotic one installed).
-    const voices = window.speechSynthesis.getVoices();
     const requested = options.voiceURI
       ? voices.find((v) => v.voiceURI === options.voiceURI)
       : undefined;
