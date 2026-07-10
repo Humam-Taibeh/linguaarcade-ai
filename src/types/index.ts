@@ -10,6 +10,7 @@
 /** Top-level navigation targets rendered by <App/>. */
 export type View =
   | "dashboard"
+  | "lessons"
   | "shadowing"
   | "review"
   | "conversation"
@@ -41,11 +42,12 @@ export interface Sentence {
   bestScore: number; // 0-100, best shadowing accuracy achieved on this sentence
 }
 
-/** One completed practice unit — a shadowing take or a conversation exchange. */
+/** One completed practice unit — a shadowing take, a conversation exchange,
+ * or a finished guided lesson. */
 export interface SessionRecord {
   id: string;
-  kind: "shadowing" | "conversation";
-  /** Accuracy is only meaningful for shadowing; conversation turns omit it. */
+  kind: "shadowing" | "conversation" | "lesson";
+  /** Accuracy is only meaningful for shadowing; other kinds omit it. */
   accuracy: number | null;
   xpEarned: number;
   /** Truncated preview of the practiced text, for the dashboard history list. */

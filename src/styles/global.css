@@ -1830,6 +1830,230 @@ input[type="checkbox"] {
 }
 
 /* ---------------------------------------------------------------------------
+ * Guided Lessons — the quiz flow (catalog → runner → result).
+ * ------------------------------------------------------------------------- */
+
+.lesson-catalog {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-4);
+}
+
+.lesson-cat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font: inherit;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.lesson-cat-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: var(--tracking-tight);
+}
+
+.lesson-cat-desc {
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+/* Runner top bar: exit ✕ | progress | hearts. */
+.lesson-topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: var(--space-5);
+}
+
+.lesson-exit {
+  min-height: 38px;
+  padding: 6px 12px;
+}
+
+.lesson-progress {
+  flex: 1;
+  height: 12px;
+  border-radius: 99px;
+  background: var(--ring-track);
+  overflow: hidden;
+}
+
+.lesson-progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  width: 100%;
+  background: var(--gradient-lime);
+  box-shadow: var(--glow-lime);
+  transform: translateX(calc(var(--fill, 0%) - 100%));
+  transition: transform 500ms var(--ease-premium);
+  will-change: transform;
+}
+
+.lesson-hearts {
+  display: flex;
+  gap: 3px;
+  font-size: 0.95rem;
+}
+
+/* Losing a heart is a slow desaturating shrink, not a jump-cut — the loss
+ * should register without feeling punitive. */
+.heart {
+  transition: filter var(--transition-slow), opacity var(--transition-slow),
+    transform 320ms var(--ease-spring);
+}
+
+.heart.lost {
+  filter: grayscale(1);
+  opacity: 0.3;
+  transform: scale(0.85);
+}
+
+.lesson-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.lesson-prompt {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 650;
+  letter-spacing: var(--tracking-tight);
+}
+
+/* Arrange: the answer line is a dashed drop-zone; the bank sits below. */
+.arrange-answer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 56px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--border-glass-bright);
+  background: var(--surface-input);
+}
+
+.arrange-placeholder {
+  color: var(--text-faint);
+  font-size: 0.88rem;
+}
+
+.arrange-bank {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.bank-chip {
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  min-height: 40px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-glass-bright);
+  background: var(--surface-glass-strong);
+  color: var(--text-primary);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 320ms var(--ease-spring), opacity var(--transition-fast),
+    background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.bank-chip:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.bank-chip:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+/* A used bank tile stays in place as a ghost — tiles never reflow under the
+ * learner's finger. */
+.bank-chip.used {
+  opacity: 0.25;
+}
+
+.bank-chip.picked {
+  background: var(--accent-tint-bg);
+  border-color: var(--accent-tint-border);
+}
+
+.lesson-feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  animation: fade-in-up 300ms var(--ease-premium) both;
+}
+
+.lesson-feedback.correct {
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
+  color: var(--success);
+}
+
+.lesson-feedback.incorrect {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  color: var(--danger);
+}
+
+.lesson-feedback .reveal {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.lesson-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* Result cards (complete / failed). */
+.lesson-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: center;
+  padding: var(--space-6) var(--space-5);
+}
+
+.lesson-result h2 {
+  margin: 0;
+  font-size: var(--text-xl);
+  letter-spacing: var(--tracking-tight);
+}
+
+.lesson-result p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.lesson-result-emoji {
+  font-size: 2.6rem;
+  animation: check-pop 560ms var(--ease-premium) both;
+}
+
+.lesson-xp-award {
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: var(--tracking-tight);
+  color: var(--game-lime);
+}
+
+/* ---------------------------------------------------------------------------
  * Utility & animation
  * ------------------------------------------------------------------------- */
 

@@ -15,6 +15,7 @@ interface NavEntry {
 
 const NAV_ENTRIES: NavEntry[] = [
   { view: "dashboard", label: "Dashboard", icon: "📊" },
+  { view: "lessons", label: "Guided Lessons", icon: "🧩" },
   { view: "shadowing", label: "Shadowing Studio", icon: "🎙️" },
   { view: "review", label: "Review Studio", icon: "🔁" },
   { view: "conversation", label: "AI Conversation", icon: "💬" },

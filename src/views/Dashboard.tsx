@@ -145,7 +145,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             sessions.slice(0, 8).map((session) => (
               <div key={session.id} className="session-row">
                 <span aria-hidden="true">
-                  {session.kind === "shadowing" ? "🎙️" : "💬"}
+                  {session.kind === "shadowing" ? "🎙️" : session.kind === "lesson" ? "🧩" : "💬"}
                 </span>
                 <span className="session-text">{session.textPreview}</span>
                 <span className="spacer" />

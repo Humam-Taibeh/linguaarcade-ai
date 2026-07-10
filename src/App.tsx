@@ -11,6 +11,7 @@ import { AppStateProvider } from "./state/AppStateContext";
 import { Sidebar } from "./components/Sidebar";
 import { UtilityRail } from "./components/UtilityRail";
 import { Dashboard } from "./views/Dashboard";
+import { LessonFlow } from "./views/LessonFlow";
 import { ShadowingStudio } from "./views/ShadowingStudio";
 import { ReviewStudio } from "./views/ReviewStudio";
 import { Conversation } from "./views/Conversation";
@@ -41,6 +42,7 @@ export default function App() {
         <Sidebar activeView={view} onNavigate={setView} />
         <main className="main-content">
           {view === "dashboard" && <Dashboard onNavigate={setView} />}
+          {view === "lessons" && <LessonFlow />}
           {view === "shadowing" && <ShadowingStudio practiceRequest={practiceRequest} />}
           {view === "review" && <ReviewStudio />}
           {view === "conversation" && <Conversation onNavigate={setView} />}
