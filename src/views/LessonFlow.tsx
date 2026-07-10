@@ -2,27 +2,30 @@
  * Guided Lessons — the Duolingo-style quiz flow rendered over the pure
  * lessonEngine state machine.
  *
- * Division of labor: the engine (lib/lessonEngine) owns ALL progression
- * rules — grading, hearts, mastery re-queue, XP math. This view only renders
- * `queue[0]`, dispatches CHECK / SKIP / CONTINUE, and fires the effects the
- * engine deliberately doesn't know about: TTS playback, chimes, and the
- * single RECORD_SESSION payout on completion. Failed runs never dispatch
- * RECORD_SESSION — the engine's "failed runs don't pay" rule is enforced by
- * this file having no code path that pays one.
+ * Division of labor: the engine (engines/lessonEngine) owns ALL progression
+ * rules — hearts, mastery re-queue, XP math. Grading resolves through the
+ * challenge registry (challenges/registry) BEFORE dispatch: this view grades
+ * the submission, then hands the engine a finished result. Beyond that it
+ * only renders `queue[0]`, dispatches CHECK / SKIP / CONTINUE, and fires the
+ * effects the engine deliberately doesn't know about: TTS playback, chimes,
+ * and the single RECORD_SESSION payout on completion. Failed runs never
+ * dispatch RECORD_SESSION — the engine's "failed runs don't pay" rule is
+ * enforced by this file having no code path that pays one.
  */
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { LESSON_CATEGORIES } from "../data/lessons";
 import type { LessonCategory } from "../types";
 import {
   MAX_HEARTS,
-  buildChallenges,
   createLesson,
   lessonReducer,
-  normalizeAnswer,
   progressFraction,
   type LessonState,
   type MissRecord,
-} from "../lib/lessonEngine";
+} from "../engines/lessonEngine";
+import { buildChallenges } from "../challenges/compile";
+import { gradeChallenge } from "../challenges/registry";
+import type { Challenge } from "../challenges/types";
 import { speak, stopSpeaking } from "../lib/speech/synthesis";
 import {
   playLevelUpFanfare,
@@ -85,7 +88,7 @@ export function LessonFlow() {
   const { settings, profile } = state;
 
   const [category, setCategory] = useState<LessonCategory | null>(null);
-  const [lesson, setLesson] = useState<LessonState | null>(null);
+  const [lesson, setLesson] = useState<LessonState<Challenge> | null>(null);
   const [typed, setTyped] = useState("");
   /** Indices into the current word bank, in tap order — indices (not words)
    * so duplicate words in a sentence stay individually selectable. */
@@ -119,7 +122,7 @@ export function LessonFlow() {
   // event can't wedge anything here either.
   useEffect(() => {
     if (!lesson || !current || lesson.phase !== "answering") return;
-    if (current.kind !== "type-what-you-hear") return;
+    if (current.spec.kind !== "dictation") return;
     void speak(current.answer, {
       voiceURI: settings.voiceURI || undefined,
       rate: settings.speechRate,
@@ -145,19 +148,24 @@ export function LessonFlow() {
     }
   }, [lesson, category, profile.xp, settings.soundEffects, dispatch]);
 
-  const answer =
-    current?.kind === "arrange"
-      ? picked.map((i) => current.wordBank?.[i] ?? "").join(" ")
-      : typed;
+  // Narrow the live challenge's kind payload once: `bank` is non-null exactly
+  // when the live challenge is an arrange, and stays narrowed inside the
+  // render callbacks below.
+  const spec = current?.spec ?? null;
+  const bank = spec?.kind === "arrange" ? spec.wordBank : null;
 
-  const handleCheck = () => {
+  const answer = bank ? picked.map((i) => bank[i] ?? "").join(" ") : typed;
+
+  const handleCheck = async () => {
     if (!lesson || !current || lesson.phase !== "answering" || !answer.trim()) return;
     stopSpeaking();
-    // Verdict is recomputed here only to pick the chime; the engine's CHECK
-    // does the authoritative grading with the same normalizer.
-    const correct = normalizeAnswer(answer) === normalizeAnswer(current.answer);
-    if (settings.soundEffects) (correct ? playSuccessChime : playTryAgainTone)();
-    setLesson(lessonReducer(lesson, { type: "CHECK", answer }));
+    // The registry does the authoritative grading; the chime and the engine
+    // both key off the same result, so sound and verdict can never disagree.
+    // The functional update (plus the engine's phase guard) makes a double
+    // tap during the await harmless.
+    const result = await gradeChallenge(current, { text: answer });
+    if (settings.soundEffects) (result.correct ? playSuccessChime : playTryAgainTone)();
+    setLesson((prev) => (prev ? lessonReducer(prev, { type: "CHECK", result }) : prev));
   };
 
   const handleSkip = () => {
@@ -299,7 +307,7 @@ export function LessonFlow() {
         <div className="glass lesson-stage">
           <h2 className="lesson-prompt">{current.prompt}</h2>
 
-          {current.kind === "arrange" && current.wordBank ? (
+          {bank ? (
             <>
               <div className="arrange-answer">
                 {picked.length === 0 ? (
@@ -313,13 +321,13 @@ export function LessonFlow() {
                       onClick={() => setPicked((p) => p.filter((i) => i !== wordIndex))}
                       disabled={lesson.phase !== "answering"}
                     >
-                      {current.wordBank?.[wordIndex]}
+                      {bank[wordIndex]}
                     </button>
                   ))
                 )}
               </div>
               <div className="arrange-bank">
-                {current.wordBank.map((word, index) => {
+                {bank.map((word, index) => {
                   const used = picked.includes(index);
                   return (
                     <button
@@ -337,7 +345,7 @@ export function LessonFlow() {
             </>
           ) : (
             <>
-              {current.kind === "type-what-you-hear" && (
+              {spec?.kind === "dictation" && (
                 <div className="row">
                   <button type="button" className="btn" onClick={hearItAgain}>
                     🔊 Hear it again
@@ -349,7 +357,7 @@ export function LessonFlow() {
                 value={typed}
                 onChange={(e) => setTyped(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleCheck();
+                  if (e.key === "Enter") void handleCheck();
                 }}
                 placeholder="Type your answer…"
                 disabled={lesson.phase !== "answering"}
@@ -378,7 +386,7 @@ export function LessonFlow() {
                 <button
                   type="button"
                   className="btn btn-primary"
-                  onClick={handleCheck}
+                  onClick={() => void handleCheck()}
                   disabled={!answer.trim()}
                 >
                   Check

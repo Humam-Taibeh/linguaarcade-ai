@@ -3,12 +3,21 @@
  * UI-free state machine.
  *
  * Architecture: the engine is a reducer over an immutable LessonState. The
- * view layer (next sprint) renders `queue[0]`, dispatches CHECK / CONTINUE /
- * SKIP, and animates off `phase` + `verdict`. Keeping the engine pure means:
- *   - it is unit-testable without a DOM,
+ * view layer renders `queue[0]`, dispatches CHECK / CONTINUE / SKIP, and
+ * animates off `phase` + `verdict`. Keeping the engine pure means:
+ *   - it is unit-testable without a DOM (see lessonEngine.test.ts),
  *   - sound (lib/audio/chimes) and XP dispatch (RECORD_SESSION) stay in the
  *     view as effects of state transitions, never inside the engine,
  *   - the progress bar can never desync from the actual queue.
+ *
+ * Phase 1 of the framework pivot (docs/ARCHITECTURE.md §4) extracted grading:
+ * CHECK carries a resolved CheckResult produced by the challenge registry, so
+ * the engine is kind-agnostic. It owns progression — hearts, mastery
+ * re-queue, XP, progress — and nothing else. It is generic over
+ * ChallengeBase, the three display fields it actually reads; each kind's
+ * payload (challenges/types.ChallengeSpec) rides through opaquely for the
+ * view and registry. That is what lets new challenge kinds ship with zero
+ * engine edits.
  *
  * The Duolingo signatures reproduced here:
  *   - a missed challenge is NOT failed — it re-queues at the back and must
@@ -19,29 +28,34 @@
  *   - hearts: every mistake costs one; at zero the run ends in "failed" and
  *     the view offers a restart. Stakes are what make the Check button tense.
  */
-import type { LessonSentence } from "../types";
 
 // ---------------------------------------------------------------------------
-// Challenge model
+// Challenge envelope
 // ---------------------------------------------------------------------------
 
 /**
- * Challenge kinds the engine grades today — all three resolve through
- * `normalizeAnswer` equality, so the reducer needs no per-kind branches.
- * Future kinds slot in by extending grading, not the state machine:
- * "speak" delegates to lib/speech/scorer, "match" grades pair sets.
+ * The only fields the engine reads from a challenge: identity for re-queueing
+ * and the display strings a MissRecord needs. Views instantiate the state
+ * with the full challenges/types.Challenge, which extends this structurally.
  */
-export type ChallengeKind = "arrange" | "type-what-you-hear" | "translation";
-
-export interface Challenge {
+export interface ChallengeBase {
   id: string;
-  kind: ChallengeKind;
   /** The instruction line, e.g. "Type what you hear". */
   prompt: string;
   /** Canonical solution — shown in the feedback banner after a miss. */
   answer: string;
-  /** Word bank for "arrange" challenges, pre-shuffled once at build time. */
-  wordBank?: string[];
+}
+
+/**
+ * The graded outcome CHECK consumes, produced by challenges/registry before
+ * dispatch. Deliberately declared here (not imported) so the engine stays at
+ * Layer 1 with zero upward imports; the registry's richer GradeResult is
+ * structurally assignable to it.
+ */
+export interface CheckResult {
+  correct: boolean;
+  /** Verbatim learner output; feeds the miss record. */
+  attempted: string;
 }
 
 export type Verdict = "correct" | "incorrect";
@@ -58,9 +72,9 @@ export interface MissRecord {
   attempted: string | null;
 }
 
-export interface LessonState {
+export interface LessonState<C extends ChallengeBase = ChallengeBase> {
   /** Remaining work; `queue[0]` is the live challenge. Misses re-queue at the back. */
-  queue: Challenge[];
+  queue: C[];
   phase: LessonPhase;
   /** Set while phase === "checked"; drives the green/red feedback banner. */
   verdict: Verdict | null;
@@ -85,31 +99,15 @@ export const XP_PERFECT_BONUS = 20;
 export const MAX_HEARTS = 5;
 
 // ---------------------------------------------------------------------------
-// Grading
-// ---------------------------------------------------------------------------
-
-/**
- * Forgiving textual equality: case, punctuation, and whitespace are learner
- * noise, not language errors. Word ORDER and word CHOICE are what we grade.
- */
-export function normalizeAnswer(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[.,!?;:'"‘’“”-]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-// ---------------------------------------------------------------------------
 // State machine
 // ---------------------------------------------------------------------------
 
 export type LessonAction =
-  | { type: "CHECK"; answer: string }
+  | { type: "CHECK"; result: CheckResult }
   | { type: "CONTINUE" }
   | { type: "SKIP" };
 
-export function createLesson(challenges: Challenge[]): LessonState {
+export function createLesson<C extends ChallengeBase>(challenges: C[]): LessonState<C> {
   return {
     queue: challenges,
     phase: challenges.length > 0 ? "answering" : "complete",
@@ -123,15 +121,19 @@ export function createLesson(challenges: Challenge[]): LessonState {
   };
 }
 
-export function lessonReducer(state: LessonState, action: LessonAction): LessonState {
+export function lessonReducer<C extends ChallengeBase>(
+  state: LessonState<C>,
+  action: LessonAction
+): LessonState<C> {
   switch (action.type) {
-    // Grade the live challenge. The verdict freezes the UI into feedback
-    // mode; nothing advances until an explicit CONTINUE, mirroring the
-    // check → feedback → continue cadence that makes quiz flows feel fair.
+    // Consume the graded outcome of the live challenge. The verdict freezes
+    // the UI into feedback mode; nothing advances until an explicit CONTINUE,
+    // mirroring the check → feedback → continue cadence that makes quiz flows
+    // feel fair.
     case "CHECK": {
       if (state.phase !== "answering" || state.queue.length === 0) return state;
       const current = state.queue[0];
-      const correct = normalizeAnswer(action.answer) === normalizeAnswer(current.answer);
+      const { correct, attempted } = action.result;
       return {
         ...state,
         phase: "checked",
@@ -147,7 +149,7 @@ export function lessonReducer(state: LessonState, action: LessonAction): LessonS
                 challengeId: current.id,
                 prompt: current.prompt,
                 answer: current.answer,
-                attempted: action.answer,
+                attempted,
               },
             ],
       };
@@ -212,39 +214,4 @@ export function lessonReducer(state: LessonState, action: LessonAction): LessonS
 /** Progress-bar fraction: only correct answers move it, and it never rewinds. */
 export function progressFraction(state: LessonState): number {
   return state.total > 0 ? state.solved / state.total : 1;
-}
-
-// ---------------------------------------------------------------------------
-// Challenge building
-// ---------------------------------------------------------------------------
-
-/**
- * Compile lesson sentences into an alternating challenge sequence: listen
- * (type-what-you-hear exercises the ear) then arrange (the word bank
- * exercises syntax). The word bank is shuffled once here so a re-render can
- * never reshuffle tiles under the learner's cursor.
- */
-export function buildChallenges(sentences: LessonSentence[]): Challenge[] {
-  return sentences.map((sentence, index) => {
-    if (index % 2 === 0) {
-      return {
-        id: `${sentence.id}-listen`,
-        kind: "type-what-you-hear" as const,
-        prompt: "Type what you hear",
-        answer: sentence.text,
-      };
-    }
-    const words = sentence.text.replace(/[.,!?;:]/g, "").split(/\s+/);
-    for (let i = words.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [words[i], words[j]] = [words[j], words[i]];
-    }
-    return {
-      id: `${sentence.id}-arrange`,
-      kind: "arrange" as const,
-      prompt: "Arrange the words into a sentence",
-      answer: sentence.text,
-      wordBank: words,
-    };
-  });
 }
