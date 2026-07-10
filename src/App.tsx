@@ -9,6 +9,7 @@
 import { useCallback, useState } from "react";
 import { AppStateProvider } from "./state/AppStateContext";
 import { Sidebar } from "./components/Sidebar";
+import { UtilityRail } from "./components/UtilityRail";
 import { Dashboard } from "./views/Dashboard";
 import { ShadowingStudio } from "./views/ShadowingStudio";
 import { ReviewStudio } from "./views/ReviewStudio";
@@ -47,6 +48,7 @@ export default function App() {
           {view === "sentences" && <MySentences onPractice={handlePracticeSentence} />}
           {view === "settings" && <SettingsView />}
         </main>
+        <UtilityRail />
       </div>
     </AppStateProvider>
   );

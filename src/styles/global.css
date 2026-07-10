@@ -28,6 +28,10 @@
   --radius-md: 12px;
   --radius-sm: 8px;
 
+  /* 3-column shell: the center Learning Zone is a fixed, distraction-free
+   * reading column — stats and utilities live in the side rails, never here. */
+  --zone-max: 700px;
+
   /* Spacing — strict 4px grid. New rules use these; legacy px values migrate
    * opportunistically as their rules get touched. */
   --space-1: 4px;
@@ -93,14 +97,30 @@
   --glow-active: 0 0 28px rgba(124, 108, 255, 0.5);
   --glow-teal: 0 0 24px -4px rgba(56, 224, 212, 0.3);
 
+  /* Gamification accents — Duolingo energy tuned for charcoal. Electric lime
+   * owns XP/quests/promotion zones, vivid orange owns the streak flame. Both
+   * sit far from the indigo/teal brand pair, so game moments read as REWARDS,
+   * not interface chrome. */
+  --game-lime: #bbf246;
+  --game-lime-bg: rgba(187, 242, 70, 0.1);
+  --game-lime-border: rgba(187, 242, 70, 0.32);
+  --gradient-lime: linear-gradient(135deg, #d3fa64 0%, #a4e522 100%);
+  --glow-lime: 0 0 22px -4px rgba(187, 242, 70, 0.4);
+  --game-orange: #ff9600;
+  --game-orange-bg: rgba(255, 150, 0, 0.1);
+  --game-orange-border: rgba(255, 150, 0, 0.32);
+  --glow-orange: 0 0 24px -4px rgba(255, 150, 0, 0.4);
+
   --surface-glass: rgba(255, 255, 255, 0.05);
   --surface-glass-strong: rgba(255, 255, 255, 0.085);
   --surface-sidebar: rgba(14, 15, 20, 0.72);
   --surface-input: rgba(0, 0, 0, 0.3);
   --menu-bg: #15161c;
 
-  --border-glass: rgba(255, 255, 255, 0.08);
-  --border-glass-bright: rgba(255, 255, 255, 0.16);
+  /* Glass mandate: hairline 1px borders at 10% white — visible as an edge,
+   * never as a frame. */
+  --border-glass: rgba(255, 255, 255, 0.1);
+  --border-glass-bright: rgba(255, 255, 255, 0.18);
 
   --text-primary: #f0f1f5;
   --text-secondary: #a2a7b8;
@@ -220,6 +240,17 @@
   --glow-focus: 0 0 14px rgba(88, 71, 232, 0.22);
   --glow-active: 0 0 22px rgba(88, 71, 232, 0.3);
   --glow-teal: 0 0 20px -6px rgba(11, 143, 133, 0.18);
+
+  /* Gamification accents re-inked for paper: same hues, AA-safe ink depth. */
+  --game-lime: #3f6212;
+  --game-lime-bg: rgba(101, 163, 13, 0.12);
+  --game-lime-border: rgba(101, 163, 13, 0.35);
+  --gradient-lime: linear-gradient(135deg, #84cc16 0%, #4d7c0f 100%);
+  --glow-lime: 0 0 18px -6px rgba(101, 163, 13, 0.25);
+  --game-orange: #b45309;
+  --game-orange-bg: rgba(217, 119, 6, 0.12);
+  --game-orange-border: rgba(217, 119, 6, 0.35);
+  --glow-orange: 0 0 18px -6px rgba(217, 119, 6, 0.3);
 }
 
 /* ---------------------------------------------------------------------------
@@ -310,9 +341,12 @@ textarea.input,
   padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
 }
 
-/* Center content on wide screens without fighting the scroll container. */
+/* The Learning Zone: every view renders as a centered reading column. Focus
+ * comes from the column being narrow ON PURPOSE — the utility rail carries
+ * the stats that used to justify a wide canvas. */
 .main-content > * {
-  max-width: 1160px;
+  width: 100%;
+  max-width: var(--zone-max);
   margin-left: auto;
   margin-right: auto;
 }
@@ -535,8 +569,8 @@ textarea.input,
   background: var(--surface-glass);
   border: 1px solid var(--border-glass);
   border-radius: var(--radius-lg);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   padding: clamp(20px, 2.6vw, 28px);
   /* The enterprise card signature: ambient elevation + a barely-there neon
    * halo at the edge + a hairline of light on the top edge — frosted glass
@@ -1458,6 +1492,277 @@ input[type="checkbox"] {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Utility Rail — right column of the 3-column desktop shell (≥1200px).
+ * Streak, level, daily quests and the weekly league in glass cards, so the
+ * gamification pressure is visible from EVERY view, not just the Dashboard.
+ * Below 1200px the rail is display:none — the Dashboard carries the stats.
+ * ------------------------------------------------------------------------- */
+
+.utility-rail {
+  display: none;
+}
+
+@media (min-width: 1200px) {
+  .utility-rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    width: 312px;
+    flex-shrink: 0;
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--space-5) var(--space-4);
+    border-left: 1px solid var(--border-glass);
+    background: var(--surface-sidebar);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+}
+
+.rail-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 18px;
+}
+
+.rail-card-label {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--text-faint);
+}
+
+.rail-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.rail-hint.faint {
+  font-size: 0.74rem;
+  color: var(--text-faint);
+}
+
+/* --- Streak (vivid orange) ---------------------------------------------- */
+
+.streak-card.lit {
+  border-color: var(--game-orange-border);
+  box-shadow: var(--shadow-e2), var(--glow-orange), inset 0 1px 0 var(--glass-inner-glow);
+}
+
+.streak-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+/* Unlit until today's first practice — the classic "go earn your fire" cue. */
+.streak-flame {
+  font-size: 1.9rem;
+  filter: grayscale(1) opacity(0.45);
+}
+
+.streak-flame.lit {
+  filter: none;
+  animation: flame-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes flame-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.streak-count {
+  font-size: 2.1rem;
+  font-weight: 800;
+  letter-spacing: var(--tracking-tight);
+  line-height: 1;
+  color: var(--game-orange);
+}
+
+.streak-unit {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* --- Level / XP (electric lime) ----------------------------------------- */
+
+.rail-level-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rail-level {
+  font-size: 1.15rem;
+  font-weight: 750;
+  letter-spacing: var(--tracking-tight);
+}
+
+.rail-xp-text {
+  font-size: 0.74rem;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.xp-bar-fill.lime {
+  background: var(--gradient-lime);
+  box-shadow: var(--glow-lime);
+}
+
+/* --- Daily quests --------------------------------------------------------- */
+
+.quest {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.quest-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  font-size: 0.95rem;
+  background: var(--surface-glass);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.quest.complete .quest-icon {
+  background: var(--game-lime-bg);
+  border-color: var(--game-lime-border);
+}
+
+.quest-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.quest-title-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.quest-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quest-progress-text {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.quest-bar {
+  height: 6px;
+  border-radius: 99px;
+  background: var(--ring-track);
+  overflow: hidden;
+  margin-top: 5px;
+}
+
+.quest-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: var(--gradient-lime);
+  box-shadow: var(--glow-lime);
+  transition: width 600ms var(--ease-premium);
+}
+
+/* Completion check pops in with the spring — the micro-reward moment. */
+.quest-check {
+  color: var(--game-lime);
+  font-weight: 800;
+  animation: check-pop 420ms var(--ease-spring) both;
+}
+
+@keyframes check-pop {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* --- Weekly league -------------------------------------------------------- */
+
+.league-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.league-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 0.84rem;
+}
+
+.league-rank {
+  width: 18px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* Top-3 = promotion zone, marked in lime like every "you're winning" signal. */
+.league-row.promotion .league-rank {
+  color: var(--game-lime);
+}
+
+.league-row.you {
+  background: var(--accent-tint-bg);
+  border-color: var(--accent-tint-border);
+  font-weight: 650;
+}
+
+.league-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.league-xp {
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------------------------------------------------------------------------
