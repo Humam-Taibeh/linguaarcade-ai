@@ -21,6 +21,7 @@ import {
   normalizeAnswer,
   progressFraction,
   type LessonState,
+  type MissRecord,
 } from "../lib/lessonEngine";
 import { speak, stopSpeaking } from "../lib/speech/synthesis";
 import {
@@ -30,6 +31,54 @@ import {
   playTryAgainTone,
 } from "../lib/audio/chimes";
 import { levelFromXp, useAppState } from "../state/AppStateContext";
+
+/**
+ * "What went wrong" — one row per struggled CHALLENGE (a re-queued miss
+ * folds into its row with a ×N counter). Shows the learner's first real
+ * attempt against the canonical answer; skips read as "skipped".
+ */
+function MissSummary({ misses }: { misses: MissRecord[] }) {
+  const byChallenge = new Map<string, MissRecord & { times: number }>();
+  for (const miss of misses) {
+    const existing = byChallenge.get(miss.challengeId);
+    if (existing) {
+      existing.times += 1;
+      // A typed attempt is more instructive than "skipped" — keep the first one seen.
+      if (existing.attempted === null && miss.attempted !== null) {
+        existing.attempted = miss.attempted;
+      }
+    } else {
+      byChallenge.set(miss.challengeId, { ...miss, times: 1 });
+    }
+  }
+  const rows = [...byChallenge.values()];
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="lesson-misses">
+      <h3 className="rail-card-label">What went wrong</h3>
+      {rows.map((row) => (
+        <div key={row.challengeId} className="miss-row">
+          <span className="miss-prompt">
+            {row.prompt}
+            {row.times > 1 ? ` · missed ${row.times}×` : ""}
+          </span>
+          <span className="miss-answer">
+            {row.attempted !== null ? (
+              <span className="miss-from">{row.attempted}</span>
+            ) : (
+              <span className="miss-from skipped">skipped</span>
+            )}
+            <span className="miss-arrow" aria-hidden="true">
+              {" → "}
+            </span>
+            <span className="miss-to">{row.answer}</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function LessonFlow() {
   const { state, dispatch } = useAppState();
@@ -176,6 +225,7 @@ export function LessonFlow() {
               ? "Flawless run — perfect bonus earned."
               : `${lesson.mistakes} miss${lesson.mistakes === 1 ? "" : "es"} — every challenge still mastered.`}
           </p>
+          <MissSummary misses={lesson.misses} />
           <div className="row">
             <button type="button" className="btn btn-primary" onClick={() => startLesson(category)}>
               Practice again
@@ -198,6 +248,7 @@ export function LessonFlow() {
           </span>
           <h2>Out of hearts</h2>
           <p>No XP this run — but the next attempt starts with a full set.</p>
+          <MissSummary misses={lesson.misses} />
           <div className="row">
             <button type="button" className="btn btn-primary" onClick={() => startLesson(category)}>
               Try again

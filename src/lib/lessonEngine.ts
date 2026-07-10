@@ -48,6 +48,16 @@ export type Verdict = "correct" | "incorrect";
 /** "failed" = hearts exhausted; terminal like "complete" but pays no XP. */
 export type LessonPhase = "answering" | "checked" | "complete" | "failed";
 
+/** One missed attempt, captured for the end-of-lesson summary. */
+export interface MissRecord {
+  challengeId: string;
+  prompt: string;
+  /** The canonical solution the learner eventually had to master. */
+  answer: string;
+  /** What the learner submitted; null when the challenge was skipped. */
+  attempted: string | null;
+}
+
 export interface LessonState {
   /** Remaining work; `queue[0]` is the live challenge. Misses re-queue at the back. */
   queue: Challenge[];
@@ -62,6 +72,9 @@ export interface LessonState {
   /** Remaining hearts. Every mistake (or skip) costs one; zero ends the run. */
   hearts: number;
   xpEarned: number;
+  /** Every miss in submission order — the "what went wrong" summary data.
+   * A re-queued challenge missed again appears once per miss. */
+  misses: MissRecord[];
 }
 
 /** Per-challenge award, matched to the app's existing XP economy (~80 XP/day). */
@@ -106,6 +119,7 @@ export function createLesson(challenges: Challenge[]): LessonState {
     mistakes: 0,
     hearts: MAX_HEARTS,
     xpEarned: 0,
+    misses: [],
   };
 }
 
@@ -125,6 +139,17 @@ export function lessonReducer(state: LessonState, action: LessonAction): LessonS
         mistakes: state.mistakes + (correct ? 0 : 1),
         hearts: state.hearts - (correct ? 0 : 1),
         xpEarned: state.xpEarned + (correct ? XP_PER_CHALLENGE : 0),
+        misses: correct
+          ? state.misses
+          : [
+              ...state.misses,
+              {
+                challengeId: current.id,
+                prompt: current.prompt,
+                answer: current.answer,
+                attempted: action.answer,
+              },
+            ],
       };
     }
 
@@ -132,12 +157,22 @@ export function lessonReducer(state: LessonState, action: LessonAction): LessonS
     // face the same challenge again before the lesson can end.
     case "SKIP": {
       if (state.phase !== "answering" || state.queue.length === 0) return state;
+      const current = state.queue[0];
       return {
         ...state,
         phase: "checked",
         verdict: "incorrect",
         mistakes: state.mistakes + 1,
         hearts: state.hearts - 1,
+        misses: [
+          ...state.misses,
+          {
+            challengeId: current.id,
+            prompt: current.prompt,
+            answer: current.answer,
+            attempted: null,
+          },
+        ],
       };
     }
 
