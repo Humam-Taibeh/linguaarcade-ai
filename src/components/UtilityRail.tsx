@@ -10,6 +10,7 @@
  * Visibility is pure CSS (≥1200px): below that the rail unmounts nothing and
  * costs nothing — display:none keeps the tree stable across resizes.
  */
+import type { CSSProperties } from "react";
 import { levelProgress, todayKey, useAppState } from "../state/AppStateContext";
 import { buildDailyQuests, buildWeeklyLeague } from "../lib/gamification";
 
@@ -61,7 +62,9 @@ export function UtilityRail() {
         >
           <div
             className="xp-bar-fill lime"
-            style={{ width: `${Math.round(progress.fraction * 100)}%` }}
+            // --fill drives a compositor-only translateX in CSS; width would
+            // re-layout the rail on every XP tick.
+            style={{ "--fill": `${Math.round(progress.fraction * 100)}%` } as CSSProperties}
           />
         </div>
         <p className="rail-hint faint">{profile.xp.toLocaleString()} XP lifetime</p>
@@ -84,7 +87,10 @@ export function UtilityRail() {
                   </span>
                 </div>
                 <div className="quest-bar">
-                  <div className="quest-bar-fill" style={{ width: `${pct}%` }} />
+                  <div
+                    className="quest-bar-fill"
+                    style={{ "--fill": `${pct}%` } as CSSProperties}
+                  />
                 </div>
               </div>
               {quest.complete && (

@@ -870,7 +870,15 @@ input[type="checkbox"] {
   transform-origin: center;
 }
 
-/* AI speaking: indigo wave. User's turn (mic hot): teal wave. */
+/* AI speaking: indigo wave. User's turn (mic hot): teal wave.
+ * will-change is scoped to CONTINUOUSLY animating elements only (voice bars,
+ * typing dots, lit flame) — promoting everything would waste GPU memory on
+ * low-end phones, the opposite of the intended effect. */
+.voice-wave.speaking .voice-bar,
+.voice-wave.listening .voice-bar {
+  will-change: transform;
+}
+
 .voice-wave.speaking .voice-bar {
   background: var(--accent);
   animation: wave-pulse 900ms ease-in-out infinite;
@@ -1353,6 +1361,7 @@ input[type="checkbox"] {
   height: 7px;
   border-radius: 50%;
   background: var(--text-faint);
+  will-change: transform, opacity;
   animation: dot-bounce 1.2s ease-in-out infinite;
 }
 
@@ -1529,6 +1538,16 @@ input[type="checkbox"] {
   flex-direction: column;
   gap: var(--space-3);
   padding: 18px;
+  transition: transform 320ms var(--ease-spring), border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+/* Depth on approach: the card lifts toward the cursor — same physical
+ * language as .glass.hoverable and the buttons, so the rail feels tactile. */
+.rail-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-glass-bright);
+  box-shadow: var(--shadow-e3), var(--glow-card), inset 0 1px 0 var(--glass-inner-glow);
 }
 
 .rail-card-label {
@@ -1559,6 +1578,11 @@ input[type="checkbox"] {
   box-shadow: var(--shadow-e2), var(--glow-orange), inset 0 1px 0 var(--glass-inner-glow);
 }
 
+/* The lit card keeps its orange halo through the hover lift. */
+.streak-card.lit:hover {
+  box-shadow: var(--shadow-e3), var(--glow-orange), inset 0 1px 0 var(--glass-inner-glow);
+}
+
 .streak-row {
   display: flex;
   align-items: baseline;
@@ -1571,8 +1595,11 @@ input[type="checkbox"] {
   filter: grayscale(1) opacity(0.45);
 }
 
+/* Alive, not blinking: scale and glow breathe together on a slow cycle.
+ * Static drop-shadow base = the reduced-motion fallback still glows. */
 .streak-flame.lit {
-  filter: none;
+  filter: drop-shadow(0 0 6px rgba(255, 150, 0, 0.4));
+  will-change: transform, filter;
   animation: flame-breathe 2.4s ease-in-out infinite;
 }
 
@@ -1580,9 +1607,11 @@ input[type="checkbox"] {
   0%,
   100% {
     transform: scale(1);
+    filter: drop-shadow(0 0 4px rgba(255, 150, 0, 0.35));
   }
   50% {
     transform: scale(1.1);
+    filter: drop-shadow(0 0 12px rgba(255, 150, 0, 0.65));
   }
 }
 
@@ -1621,9 +1650,17 @@ input[type="checkbox"] {
   font-variant-numeric: tabular-nums;
 }
 
+/* GPU note: the rail's bar fills animate transform, not width — the fill is
+ * always full-width and slides right by `--fill` percent inside the clipped
+ * track, so progress updates never trigger layout. Both end caps stay
+ * perfectly round at every fraction (unlike a scaleX squash). */
 .xp-bar-fill.lime {
   background: var(--gradient-lime);
   box-shadow: var(--glow-lime);
+  width: 100%;
+  transform: translateX(calc(var(--fill, 0%) - 100%));
+  transition: transform 600ms var(--ease-premium);
+  will-change: transform;
 }
 
 /* --- Daily quests --------------------------------------------------------- */
@@ -1689,23 +1726,50 @@ input[type="checkbox"] {
   border-radius: 99px;
   background: var(--gradient-lime);
   box-shadow: var(--glow-lime);
-  transition: width 600ms var(--ease-premium);
+  width: 100%;
+  transform: translateX(calc(var(--fill, 0%) - 100%));
+  transition: transform 600ms var(--ease-premium);
+  will-change: transform;
 }
 
-/* Completion check pops in with the spring — the micro-reward moment. */
+/* Hitting 100% earns a one-shot brightness surge along the full bar —
+ * the bar itself celebrates, not just the checkmark. */
+.quest.complete .quest-bar-fill {
+  animation: bar-celebrate 700ms var(--ease-premium) both;
+}
+
+@keyframes bar-celebrate {
+  0% {
+    filter: brightness(1);
+  }
+  45% {
+    filter: brightness(1.5);
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
+
+/* Completion check: true spring — overshoots big with a tilt, settles
+ * upright. The overshoot lives in the keyframes so the easing can stay
+ * smooth; rotation makes it read as "stamped", not "faded in". */
 .quest-check {
   color: var(--game-lime);
   font-weight: 800;
-  animation: check-pop 420ms var(--ease-spring) both;
+  animation: check-pop 480ms var(--ease-premium) both;
 }
 
 @keyframes check-pop {
-  from {
-    transform: scale(0);
+  0% {
+    transform: scale(0) rotate(-30deg);
     opacity: 0;
   }
-  to {
-    transform: scale(1);
+  60% {
+    transform: scale(1.35) rotate(8deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
     opacity: 1;
   }
 }

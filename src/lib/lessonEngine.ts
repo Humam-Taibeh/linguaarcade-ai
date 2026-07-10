@@ -160,6 +160,9 @@ export function lessonReducer(state: LessonState, action: LessonAction): LessonS
           solved,
           phase: "complete",
           verdict: null,
+          // Flawless means flawless: `mistakes` counts wrong answers AND
+          // skips (both paths increment it in CHECK/SKIP), so one skip
+          // anywhere permanently forfeits the bonus.
           xpEarned: state.xpEarned + (state.mistakes === 0 ? XP_PERFECT_BONUS : 0),
         };
       }
